@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -73,6 +74,15 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save transaction"})
 		return
 	}
+	// 6. Fetch merchant by merchant_id on the transaction then notify async
+	if transaction.MerchantID != 0 {
+		merchant, err := h.store.GetMerchantByID(transaction.MerchantID)
+		if err == nil {
+			go payments.NotifyMerchant(merchant, transaction)
+		} else {
+			log.Printf("notifier: could not find merchant %d: %v", transaction.MerchantID, err)
+		}
+	}
 
 	log.Printf("transaction %s received — external_id: %s amount: %s %s",
 		transaction.ProviderTxID, transaction.ExternalID, transaction.Amount, transaction.Currency)
@@ -81,22 +91,74 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 }
 
 func (h *Handler) GetTransaction(c *gin.Context) {
+	merchant := auth.MerchantFrom(c)
 	providerTxID := c.Param("id")
 
-	tx, err := h.store.GetByID(providerTxID)
-	if err != nil {
+	transaction, err := h.store.GetByID(providerTxID)
+	if err != nil || transaction.MerchantID != merchant.ID {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
 		return
 	}
 
+	c.JSON(http.StatusOK, normalizeTransaction(transaction))
+
+}
+func (h *Handler) ListTransactions(c *gin.Context) {
+	merchant := auth.MerchantFrom(c)
+
+	status := c.Query("status")
+	externalID := c.Query("external_id")
+
+	// Single lookup by external_id
+	if externalID != "" {
+		transaction, err := h.store.GetByExternalID(externalID, merchant.ID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
+			return
+		}
+		c.JSON(http.StatusOK, normalizeTransaction(transaction))
+		return
+	}
+
+	// Paginated list
+	page := 1
+	limit := 20
+	if p := c.Query("page"); p != "" {
+		fmt.Sscanf(p, "%d", &page)
+	}
+	if l := c.Query("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	offset := (page - 1) * limit
+
+	transactions, err := h.store.ListTransactions(merchant.ID, status, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch transactions"})
+		return
+	}
+
+	results := make([]gin.H, len(transactions))
+	for i, tx := range transactions {
+		results[i] = normalizeTransaction(&tx)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"id":             tx.ID,
+		"page":  page,
+		"limit": limit,
+		"count": len(results),
+		"data":  results,
+	})
+}
+
+// normalizeTransaction returns a clean response — not raw DB fields
+func normalizeTransaction(tx *storage.Transaction) gin.H {
+	return gin.H{
+		"paid":           tx.Status == storage.TxStatusSuccessful,
+		"status":         tx.Status,
 		"provider_tx_id": tx.ProviderTxID,
 		"external_id":    tx.ExternalID,
 		"amount":         tx.Amount,
 		"currency":       tx.Currency,
-		"status":         tx.Status,
 		"received_at":    tx.ReceivedAt,
-		"created_at":     tx.CreatedAt,
-	})
+	}
 }

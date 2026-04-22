@@ -14,6 +14,7 @@ const (
 // internal records
 type Transaction struct {
 	ID           int64
+	MerchantID   int64
 	ProviderTxID string
 	ExternalID   string
 	Amount       string
@@ -23,4 +24,13 @@ type Transaction struct {
 	RawPayload   []byte
 	ReceivedAt   time.Time
 	CreatedAt    time.Time
+}
+
+type Merchant struct {
+	ID         int64
+	Name       string
+	APIKey     string
+	WebhookURL string
+	Active     bool
+	CreatedAt  time.Time
 }

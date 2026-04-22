@@ -15,7 +15,26 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+
+-- Merchants
+CREATE TABLE IF NOT EXISTS merchants (
+    id          BIGSERIAL PRIMARY KEY,
+    name        TEXT        NOT NULL,
+    api_key     TEXT        NOT NULL UNIQUE,
+    webhook_url TEXT,
+    active      BOOLEAN     NOT NULL DEFAULT true,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- Add merchant_id to transactions
+ALTER TABLE transactions
+    ADD COLUMN merchant_id BIGINT REFERENCES merchants(id);
+
+
 -- Indexes we'll actually use
+CREATE INDEX idx_merchants_api_key ON merchants(api_key);
+CREATE INDEX idx_transactions_merchant_id ON transactions(merchant_id);
 CREATE INDEX idx_transactions_external_id   ON transactions(external_id);
 CREATE INDEX idx_transactions_status        ON transactions(status);
 CREATE INDEX idx_transactions_received_at   ON transactions(received_at DESC);

@@ -14,3 +14,11 @@ type Payer struct {
 	PartyIDType string `json:"partyIdType"`
 	PartyID     string `json:"partyId"`
 }
+
+type NotifyPayload struct {
+	ExternalID string `json:"external_id"`
+	Status     string `json:"status"`
+	Amount     string `json:"amount"`
+	Currency   string `json:"currency"`
+	Paid       bool   `json:"paid"`
+}
