@@ -29,7 +29,7 @@ func NewVerifier(secret string, seen SeenChecker) *Verifier {
 }
 
 type SeenChecker interface {
-	TransactionExists(providerTxID string) (bool, error)
+	Exists(providerTxID string) (bool, error)
 }
 
 // verify both checks
@@ -69,7 +69,7 @@ func (v *Verifier) checkReplay(providerTxID string) error {
 		return ErrMissingProviderTxID
 	}
 
-	exists, err := v.seen.TransactionExists(providerTxID)
+	exists, err := v.seen.Exists(providerTxID)
 	if err != nil {
 		return ErrReplayFailure
 	}

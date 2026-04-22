@@ -36,7 +36,7 @@ func FromWebhook(p momodto.WebhookPayload, rawBody []byte) (*storage.Transaction
 		Status:       storage.TxStatus(p.Status),
 		PayerMSISDN:  hashMSISDN(p.Payer.PartyID),
 		RawPayload:   rawBody,
-		RecievedAt:   timeStamp,
+		ReceivedAt:   timeStamp,
 	}, nil
 }
 

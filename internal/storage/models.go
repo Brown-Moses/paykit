@@ -21,6 +21,6 @@ type Transaction struct {
 	Status       TxStatus
 	PayerMSISDN  string
 	RawPayload   []byte
-	RecievedAt   time.Time
+	ReceivedAt   time.Time
 	CreatedAt    time.Time
 }
