@@ -79,3 +79,24 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 }
+
+func (h *Handler) GetTransaction(c *gin.Context) {
+	providerTxID := c.Param("id")
+
+	tx, err := h.store.GetByID(providerTxID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":             tx.ID,
+		"provider_tx_id": tx.ProviderTxID,
+		"external_id":    tx.ExternalID,
+		"amount":         tx.Amount,
+		"currency":       tx.Currency,
+		"status":         tx.Status,
+		"received_at":    tx.ReceivedAt,
+		"created_at":     tx.CreatedAt,
+	})
+}

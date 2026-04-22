@@ -10,7 +10,10 @@ import (
 func NewRouter(verifier *auth.Verifier, store *storage.Store) *gin.Engine {
 	r := gin.Default()
 
-	r.POST("/webhook/momo", webhooks.NewHandler(verifier, store).HandleMoMoWebhook)
+	webHook := webhooks.NewHandler(verifier, store)
+
+	r.POST("/webhook/momo", webHook.HandleMoMoWebhook)
+	r.GET("/transactions/:id", webHook.GetTransaction)
 
 	return r
 }
