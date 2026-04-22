@@ -1,3 +1,4 @@
+
 -- Enum for transaction status
 CREATE TYPE tx_status AS ENUM ('PENDING', 'SUCCESSFUL', 'FAILED');
 

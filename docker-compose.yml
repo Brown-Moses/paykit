@@ -1,14 +1,13 @@
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: paykit_db
-    restart: unless-stopped
+    image: postgres:15
+    container_name: paykit_postgres
     environment:
       POSTGRES_USER: paykit
       POSTGRES_PASSWORD: paykit_secret
       POSTGRES_DB: paykit
     ports:
-      - "5433:5432"
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./internal/storage/migrate.sql:/docker-entrypoint-initdb.d/migrate.sql
