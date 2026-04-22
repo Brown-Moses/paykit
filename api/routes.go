@@ -1,18 +1,16 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/Brown-Moses/paykit/internal/auth"
 	"github.com/Brown-Moses/paykit/internal/storage"
-	"github.com/Brown-Moses/paykit/internal/webhook"
+	webhooks "github.com/Brown-Moses/paykit/internal/webhook"
+	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(verifier *auth.Verifier, store *storage.Store) http.Handler {
-	mux := http.NewServeMux()
+func NewRouter(verifier *auth.Verifier, store *storage.Store) *gin.Engine {
+	r := gin.Default()
 
-	webHook := webhook.NewHandler(verifier, store)
-	mux.HandleFunc("POST /webhook/momo", webHook.HandlerMoMoWebhook)
+	r.POST("/webhook/momo", webhooks.NewHandler(verifier, store).HandleMoMoWebhook)
 
-	return mux
+	return r
 }

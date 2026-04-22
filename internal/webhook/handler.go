@@ -1,16 +1,18 @@
 package webhook
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net/http"
 
+	"encoding/json"
+
 	"github.com/Brown-Moses/paykit/internal/auth"
 	"github.com/Brown-Moses/paykit/internal/payments"
 	"github.com/Brown-Moses/paykit/internal/storage"
 	"github.com/Brown-Moses/paykit/pkg/momodto"
+	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
@@ -25,65 +27,55 @@ func NewHandler(verifier *auth.Verifier, store *storage.Store) *Handler {
 	}
 }
 
-func (h *Handler) HandlerMoMoWebhook(w http.ResponseWriter, r *http.Request) {
-	//read raw bod first(hmac)
-	body, err := io.ReadAll(r.Body)
+func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
+	// 1. Read raw body — needed for HMAC and storage
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "couldnot read request body")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "could not read request body"})
 		return
 	}
 
-	defer r.Body.Close()
-
-	//Decode to get providerTxID for the replay check
+	// 2. Decode into raw DTO
 	var raw momodto.WebhookPayload
 	if err := json.Unmarshal(body, &raw); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON payload")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
 		return
 	}
 
-	//verify - hmac signature + replay attack check(Must happen before trusting the payload)
-	signature := r.Header.Get("X-Signature")
+	// 3. Verify — HMAC + replay check
+	signature := c.GetHeader("X-Signature")
 	if err := h.verifier.Verify(body, signature, raw.TransactionID); err != nil {
 		switch {
 		case errors.Is(err, auth.ErrMissingSignature):
-			writeError(w, http.StatusUnauthorized, "missing signature header")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing signature header"})
 		case errors.Is(err, auth.ErrInvalidSignature):
-			writeError(w, http.StatusUnauthorized, "invalid signature")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		case errors.Is(err, auth.ErrReplay):
-			// Return 200 on replays — MTN will keep retrying if we return an error.
-			// Silently accept and move on.
+			// Return 200 — MTN retries on anything else
 			log.Printf("replay detected for tx %s — ignoring", raw.TransactionID)
-			w.WriteHeader(http.StatusOK)
+			c.Status(http.StatusOK)
 		default:
-			writeError(w, http.StatusInternalServerError, "verification failed")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "verification failed"})
 		}
 		return
 	}
 
-	//parse raw payload into internal model
+	// 4. Parse into internal model
 	transaction, err := payments.FromWebhook(raw, body)
 	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
 
-	//save to postgres
+	// 5. Save to Postgres
 	if err := h.store.Insert(*transaction); err != nil {
 		log.Printf("failed to insert transaction %s: %v", transaction.ProviderTxID, err)
-		writeError(w, http.StatusInternalServerError, "could not save transaction")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save transaction"})
 		return
 	}
 
-	log.Printf("transaction %s recieved - external_id: %s amount: %s %s", transaction.ProviderTxID, transaction.ExternalID, transaction.Amount, transaction.Currency)
+	log.Printf("transaction %s received — external_id: %s amount: %s %s",
+		transaction.ProviderTxID, transaction.ExternalID, transaction.Amount, transaction.Currency)
 
-	//always return 200 quickly- MTN will retry on anything else
-	w.WriteHeader(http.StatusOK)
-
-}
-
-func writeError(w http.ResponseWriter, code int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+	c.Status(http.StatusOK)
 }

@@ -1,4 +1,25 @@
+# Environment variables — never commit these
 .env
-.env.example
+.env.*.local
 
-.vscode
+# Binaries
+paykit
+/bin/
+*.exe
+
+# Go build cache
+*.out
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres_data/

@@ -1,7 +1,7 @@
 -- Enum for transaction status
 CREATE TYPE tx_status AS ENUM ('PENDING', 'SUCCESSFUL', 'FAILED');
 
-CREATE TABLE transactions (
+CREATE TABLE IF NOT EXISTS transactions (
     id              BIGSERIAL PRIMARY KEY,
     provider_tx_id  TEXT        NOT NULL UNIQUE,  -- idempotency key
     external_id     TEXT        NOT NULL,          -- maps to your order_id
