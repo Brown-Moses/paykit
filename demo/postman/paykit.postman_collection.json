@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "PayKit — Payment Event Engine (Full Test Suite)",
-    "description": "Webhook security + merchant auth + query APIs",
+    "description": "Webhook security + merchant auth + query APIs + delivery logs + health",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -26,7 +26,6 @@
     }
   ],
   "item": [
-
     {
       "name": "1. Merchant",
       "item": [
@@ -57,6 +56,74 @@
                   "",
                   "pm.test(\"API key exists\", function () {",
                   "  pm.expect(json.api_key).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"API key has correct prefix\", function () {",
+                  "  pm.expect(json.api_key).to.match(/^pk_live_/);",
+                  "});",
+                  "",
+                  "pm.test(\"Message warns to save key\", function () {",
+                  "  pm.expect(json.message).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Merchant — missing name",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
+            },
+            "url": "{{base_url}}/merchants"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject missing name\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test(\"Error message exists\", function () {",
+                  "  pm.expect(pm.response.json().error).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Merchant — no webhook URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No Webhook Shop\"\n}"
+            },
+            "url": "{{base_url}}/merchants"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Merchant created without webhook URL\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"API key still generated\", function () {",
+                  "  pm.expect(pm.response.json().api_key).to.exist;",
                   "});"
                 ]
               }
@@ -65,7 +132,6 @@
         }
       ]
     },
-
     {
       "name": "2. Webhooks (Security + Processing)",
       "item": [
@@ -102,7 +168,37 @@
             }
           ]
         },
-
+        {
+          "name": "Receive FAILED payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TX-002\",\n  \"externalId\": \"order_988\",\n  \"amount\": \"2000\",\n  \"currency\": \"RWF\",\n  \"status\": \"FAILED\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:00:00Z\"\n}"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Failed payment accepted\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"No notification fired for FAILED — fast response\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Missing signature",
           "request": {
@@ -112,7 +208,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{ \"transactionId\": \"TX-002\" }"
+              "raw": "{ \"transactionId\": \"TX-003\" }"
             },
             "url": "{{base_url}}/webhook/momo"
           },
@@ -129,7 +225,6 @@
             }
           ]
         },
-
         {
           "name": "Invalid signature",
           "request": {
@@ -157,7 +252,6 @@
             }
           ]
         },
-
         {
           "name": "Replay attack",
           "request": {
@@ -189,7 +283,6 @@
             }
           ]
         },
-
         {
           "name": "Malformed payload",
           "request": {
@@ -219,7 +312,6 @@
         }
       ]
     },
-
     {
       "name": "3. Transactions (Auth Required)",
       "item": [
@@ -245,13 +337,24 @@
                   "",
                   "pm.test(\"Correct transaction\", function () {",
                   "  pm.expect(json.provider_tx_id).to.eql(\"TX-001\");",
+                  "});",
+                  "",
+                  "pm.test(\"Paid field is true\", function () {",
+                  "  pm.expect(json.paid).to.be.true;",
+                  "});",
+                  "",
+                  "pm.test(\"Status is SUCCESSFUL\", function () {",
+                  "  pm.expect(json.status).to.eql(\"SUCCESSFUL\");",
+                  "});",
+                  "",
+                  "pm.test(\"Amount is correct\", function () {",
+                  "  pm.expect(json.amount).to.eql(\"1000\");",
                   "});"
                 ]
               }
             }
           ]
         },
-
         {
           "name": "List transactions",
           "request": {
@@ -268,13 +371,53 @@
                 "exec": [
                   "pm.test(\"Authorized list\", function () {",
                   "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Has pagination fields\", function () {",
+                  "  pm.expect(json.page).to.exist;",
+                  "  pm.expect(json.limit).to.exist;",
+                  "  pm.expect(json.count).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Data is an array\", function () {",
+                  "  pm.expect(json.data).to.be.an(\"array\");",
                   "});"
                 ]
               }
             }
           ]
         },
-
+        {
+          "name": "Filter by status",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions?status=SUCCESSFUL"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"All results are SUCCESSFUL\", function () {",
+                  "  const json = pm.response.json();",
+                  "  json.data.forEach(function (transaction) {",
+                  "    pm.expect(transaction.status).to.eql(\"SUCCESSFUL\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Filter by external_id",
           "request": {
@@ -283,9 +426,52 @@
               { "key": "Authorization", "value": "Bearer {{api_key}}" }
             ],
             "url": "{{base_url}}/transactions?external_id=order_987"
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Correct external_id\", function () {",
+                  "  pm.expect(pm.response.json().external_id).to.eql(\"order_987\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
-
+        {
+          "name": "Pagination",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions?page=1&limit=5"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Limit respected\", function () {",
+                  "  const json = pm.response.json();",
+                  "  pm.expect(json.data.length).to.be.at.most(5);",
+                  "  pm.expect(json.limit).to.eql(5);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Unauthorized access",
           "request": {
@@ -305,7 +491,6 @@
             }
           ]
         },
-
         {
           "name": "Transaction not found",
           "request": {
@@ -329,7 +514,164 @@
           ]
         }
       ]
+    },
+    {
+      "name": "4. Delivery Logs",
+      "item": [
+        {
+          "name": "Get delivery logs — TX-001",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions/TX-001/deliveries"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Transaction ID present\", function () {",
+                  "  pm.expect(json.transaction_id).to.eql(\"TX-001\");",
+                  "});",
+                  "",
+                  "pm.test(\"Webhook URL present\", function () {",
+                  "  pm.expect(json.webhook_url).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Attempts count present\", function () {",
+                  "  pm.expect(json.attempts).to.be.a(\"number\");",
+                  "});",
+                  "",
+                  "pm.test(\"Logs is an array\", function () {",
+                  "  pm.expect(json.logs).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Each log has required fields\", function () {",
+                  "  json.logs.forEach(function (log) {",
+                  "    pm.expect(log.attempt).to.exist;",
+                  "    pm.expect(log.status).to.exist;",
+                  "    pm.expect(log.delivered_at).to.exist;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get delivery logs — FAILED transaction",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions/TX-002/deliveries"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"No delivery attempts for FAILED transaction\", function () {",
+                  "  pm.expect(pm.response.json().attempts).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get delivery logs — not found",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions/TX-999/deliveries"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Returns 404\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get delivery logs — unauthorized",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/transactions/TX-001/deliveries"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject unauthorized\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. System",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Status is ok\", function () {",
+                  "  pm.expect(json.status).to.eql(\"ok\");",
+                  "});",
+                  "",
+                  "pm.test(\"Database is connected\", function () {",
+                  "  pm.expect(json.database).to.eql(\"connected\");",
+                  "});",
+                  "",
+                  "pm.test(\"Fast response\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
-
   ]
 }
