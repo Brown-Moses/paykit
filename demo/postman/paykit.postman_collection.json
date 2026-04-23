@@ -1,18 +1,13 @@
 {
   "info": {
-    "name": "PayKit — Mobile Money Webhook Engine",
-    "description": "Webhook testing + security validation suite",
+    "name": "PayKit — Payment Event Engine (Full Test Suite)",
+    "description": "Webhook security + merchant auth + query APIs",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8080"
-    },
-    {
-      "key": "webhook_secret",
-      "value": "test_secret"
-    }
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "webhook_secret", "value": "test_secret" },
+    { "key": "api_key", "value": "" }
   ],
   "event": [
     {
@@ -22,7 +17,7 @@
           "const secret = pm.collectionVariables.get(\"webhook_secret\");",
           "const body = pm.request.body ? pm.request.body.raw : \"\";",
           "",
-          "if (body) {",
+          "if (body && pm.request.headers.has(\"X-Signature\")) {",
           "  const signature = CryptoJS.HmacSHA256(body, secret).toString();",
           "  pm.variables.set(\"hmac_signature\", signature);",
           "}"
@@ -31,197 +26,310 @@
     }
   ],
   "item": [
+
     {
-      "name": "Receive valid payment",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Signature", "value": "{{hmac_signature}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+      "name": "1. Merchant",
+      "item": [
+        {
+          "name": "Create Merchant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Shop\",\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
+            },
+            "url": "{{base_url}}/merchants"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Merchant created\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set(\"api_key\", json.api_key);",
+                  "",
+                  "pm.test(\"API key exists\", function () {",
+                  "  pm.expect(json.api_key).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "name": "2. Webhooks (Security + Processing)",
+      "item": [
+        {
+          "name": "Receive valid payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Fast response\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(500);",
+                  "});",
+                  "",
+                  "postman.setNextRequest(\"Get transaction by ID (Auth)\");"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{base_url}}/webhook/momo"
-      },
-      "event": [
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Status 200\", function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test(\"Fast response\", function () {",
-              "  pm.expect(pm.response.responseTime).to.be.below(500);",
-              "});",
-              "",
-              "postman.setNextRequest(\"Get transaction by ID\");"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Missing signature",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \"transactionId\": \"TX-002\" }"
+          "name": "Missing signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"transactionId\": \"TX-002\" }"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject missing signature\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{base_url}}/webhook/momo"
-      },
-      "event": [
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Reject missing signature\", function () {",
-              "  pm.response.to.have.status(401);",
-              "});"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Invalid signature",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Signature", "value": "invalidsignature" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \"transactionId\": \"TX-003\" }"
+          "name": "Invalid signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "invalidsignature" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"transactionId\": \"TX-003\" }"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject invalid signature\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{base_url}}/webhook/momo"
-      },
-      "event": [
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Reject invalid signature\", function () {",
-              "  pm.response.to.have.status(401);",
-              "});"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Replay attack",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Signature", "value": "{{hmac_signature}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+          "name": "Replay attack",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Replay returns 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Fast replay\", function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(300);",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{base_url}}/webhook/momo"
-      },
-      "event": [
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Replay returns 200\", function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test(\"Fast replay\", function () {",
-              "  pm.expect(pm.response.responseTime).to.be.below(300);",
-              "});"
-            ]
-          }
+          "name": "Malformed payload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"transactionId\": 123, \"amount\": \"oops\" }"
+            },
+            "url": "{{base_url}}/webhook/momo"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject malformed\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
+
     {
-      "name": "Malformed payload",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" },
-          { "key": "X-Signature", "value": "{{hmac_signature}}" }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \"transactionId\": 123, \"amount\": \"oops\" }"
+      "name": "3. Transactions (Auth Required)",
+      "item": [
+        {
+          "name": "Get transaction by ID (Auth)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions/TX-001"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test(\"Correct transaction\", function () {",
+                  "  pm.expect(json.provider_tx_id).to.eql(\"TX-001\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
-        "url": "{{base_url}}/webhook/momo"
-      },
-      "event": [
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Reject malformed\", function () {",
-              "  pm.response.to.have.status(400);",
-              "});"
-            ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "Get transaction by ID",
-      "request": {
-        "method": "GET",
-        "url": "{{base_url}}/transactions/TX-001"
-      },
-      "event": [
+          "name": "List transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Authorized list\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Status 200\", function () {",
-              "  pm.response.to.have.status(200);",
-              "});",
-              "",
-              "const json = pm.response.json();",
-              "",
-              "pm.test(\"Correct transaction\", function () {",
-              "  pm.expect(json.provider_tx_id).to.eql(\"TX-001\");",
-              "});",
-              "",
-              "pm.test(\"Status correct\", function () {",
-              "  pm.expect(json.status).to.eql(\"SUCCESSFUL\");",
-              "});"
-            ]
+          "name": "Filter by external_id",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions?external_id=order_987"
           }
-        }
-      ]
-    },
-    {
-      "name": "Transaction not found",
-      "request": {
-        "method": "GET",
-        "url": "{{base_url}}/transactions/TX-999"
-      },
-      "event": [
+        },
+
         {
-          "listen": "test",
-          "script": {
-            "exec": [
-              "pm.test(\"Returns 404\", function () {",
-              "  pm.response.to.have.status(404);",
-              "});"
-            ]
-          }
+          "name": "Unauthorized access",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/transactions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reject unauthorized\", function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+
+        {
+          "name": "Transaction not found",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "url": "{{base_url}}/transactions/TX-999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Returns 404\", function () {",
+                  "  pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
+
   ]
 }

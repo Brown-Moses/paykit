@@ -38,3 +38,4 @@ CREATE INDEX idx_transactions_merchant_id ON transactions(merchant_id);
 CREATE INDEX idx_transactions_external_id   ON transactions(external_id);
 CREATE INDEX idx_transactions_status        ON transactions(status);
 CREATE INDEX idx_transactions_received_at   ON transactions(received_at DESC);
+
