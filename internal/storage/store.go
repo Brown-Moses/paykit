@@ -15,6 +15,11 @@ func NewStore(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
+// Ping checks the database connection
+func (s *Store) Ping() error {
+	return s.db.Ping(context.Background())
+}
+
 func (s *Store) Exists(providerTxID string) (bool, error) {
 	var exists bool
 	err := s.db.QueryRow(

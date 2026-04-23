@@ -1,19 +1,39 @@
 basePath: /
 host: localhost:8080
 info:
-  contact:
-    email: support@paykit.dev
-    name: PayKit Support
+  contact: {}
   description: Production-ready multi-tenant payment notification engine for MTN MoMo.
-    Handles webhook verification, transaction storage, merchant notifications, and
-    delivery tracking.
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  termsOfService: http://paykit.dev/terms
   title: PayKit — Mobile Money Webhook Engine
   version: "1.0"
 paths:
+  /health:
+    get:
+      description: Returns server and database status. Use this to verify the service
+        is running before sending webhooks.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              database:
+                type: string
+              status:
+                type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            properties:
+              database:
+                type: string
+              status:
+                type: string
+            type: object
+      summary: Health check
+      tags:
+      - System
   /transactions:
     get:
       description: Returns paginated transactions for the authenticated merchant.

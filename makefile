@@ -34,5 +34,8 @@ db-backup:
 db-restore FILE=:
 	cat $(FILE) | docker exec -i paykit_postgres psql -U paykit -d paykit
 
-swag:
+swagger:
 	swag init -g cmd/paykit/main.go --output docs
+
+health:
+	curl -s http://localhost:8080/health | jq

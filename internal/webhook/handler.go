@@ -228,6 +228,29 @@ func (h *Handler) GetDeliveryLogs(c *gin.Context) {
 	})
 }
 
+// Health godoc
+// @Summary      Health check
+// @Description  Returns server and database status. Use this to verify the service is running before sending webhooks.
+// @Tags         System
+// @Produce      json
+// @Success      200  {object}  object{status=string,database=string}
+// @Failure      503  {object}  object{status=string,database=string}
+// @Router       /health [get]
+func (h *Handler) Health(c *gin.Context) {
+	if err := h.store.Ping(); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":   "degraded",
+			"database": "unreachable",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":   "ok",
+		"database": "connected",
+	})
+}
+
 // normalizeTransaction returns a clean response — not raw DB fields
 func normalizeTransaction(tx *storage.Transaction) gin.H {
 	return gin.H{
