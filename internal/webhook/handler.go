@@ -28,6 +28,21 @@ func NewHandler(verifier *auth.Verifier, store *storage.Store) *Handler {
 	}
 }
 
+// HandleMoMoWebhook godoc
+// @Summary      Receive MTN MoMo payment webhook
+// @Description  Receives and processes a payment webhook from MTN MoMo. Verifies HMAC-SHA256 signature, checks for replay attacks, stores the transaction, and notifies the merchant asynchronously.
+// @Tags         Webhooks
+// @Accept       json
+// @Produce      json
+// @Param        X-Signature  header  string                true  "HMAC-SHA256 signature of request body"
+// @Param        request      body    momodto.WebhookPayload true  "MTN MoMo webhook payload"
+// @Success      200
+// @Failure      400  {object}  object{error=string}
+// @Failure      401  {object}  object{error=string}
+// @Failure      422  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /webhook/momo [post]
+
 func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 	// 1. Read raw body — needed for HMAC and storage
 	body, err := io.ReadAll(c.Request.Body)
@@ -78,7 +93,7 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 	if transaction.MerchantID != 0 {
 		merchant, err := h.store.GetMerchantByID(transaction.MerchantID)
 		if err == nil {
-			go payments.NotifyMerchant(merchant, transaction)
+			go payments.NotifyMerchant(h.store, merchant, transaction)
 		} else {
 			log.Printf("notifier: could not find merchant %d: %v", transaction.MerchantID, err)
 		}
@@ -90,6 +105,17 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// GetTransaction godoc
+// @Summary      Get transaction by provider ID
+// @Description  Returns a single transaction scoped to the authenticated merchant. The paid field gives a simple true/false answer.
+// @Tags         Transactions
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Provider transaction ID (e.g. TX-001)"
+// @Success      200  {object}  object{paid=bool,status=string,provider_tx_id=string,external_id=string,amount=string,currency=string,received_at=string}
+// @Failure      401  {object}  object{error=string}
+// @Failure      404  {object}  object{error=string}
+// @Router       /transactions/{id} [get]
 func (h *Handler) GetTransaction(c *gin.Context) {
 	merchant := auth.MerchantFrom(c)
 	providerTxID := c.Param("id")
@@ -103,6 +129,21 @@ func (h *Handler) GetTransaction(c *gin.Context) {
 	c.JSON(http.StatusOK, normalizeTransaction(transaction))
 
 }
+
+// ListTransactions godoc
+// @Summary      List and filter transactions
+// @Description  Returns paginated transactions for the authenticated merchant. Filter by status or look up a specific order using external_id.
+// @Tags         Transactions
+// @Produce      json
+// @Security     BearerAuth
+// @Param        external_id  query     string  false  "Look up by order ID (e.g. order_987)"
+// @Param        status       query     string  false  "Filter by status: SUCCESSFUL, FAILED, PENDING"
+// @Param        page         query     int     false  "Page number (default: 1)"
+// @Param        limit        query     int     false  "Results per page (default: 20)"
+// @Success      200          {object}  object{page=int,limit=int,count=int,data=array}
+// @Failure      401          {object}  object{error=string}
+// @Failure      500          {object}  object{error=string}
+// @Router       /transactions [get]
 func (h *Handler) ListTransactions(c *gin.Context) {
 	merchant := auth.MerchantFrom(c)
 
@@ -147,6 +188,43 @@ func (h *Handler) ListTransactions(c *gin.Context) {
 		"limit": limit,
 		"count": len(results),
 		"data":  results,
+	})
+}
+
+// GetDeliveryLogs godoc
+// @Summary      Get delivery attempts for a transaction
+// @Description  Returns all webhook delivery attempts made to the merchant's webhook URL for a given transaction. Shows attempt number, status, HTTP response code, and any error messages.
+// @Tags         Delivery Logs
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Provider transaction ID (e.g. TX-001)"
+// @Success      200  {object}  object{transaction_id=string,webhook_url=string,attempts=int,logs=array}
+// @Failure      401  {object}  object{error=string}
+// @Failure      404  {object}  object{error=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /transactions/{id}/deliveries [get]
+func (h *Handler) GetDeliveryLogs(c *gin.Context) {
+	merchant := auth.MerchantFrom(c)
+	providerTxID := c.Param("id")
+
+	// First verify transaction belongs to this merchant
+	transaction, err := h.store.GetByID(providerTxID)
+	if err != nil || transaction.MerchantID != merchant.ID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
+		return
+	}
+
+	logs, err := h.store.GetDeliveryLogs(transaction.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch delivery logs"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"transaction_id": providerTxID,
+		"webhook_url":    merchant.WebhookURL,
+		"attempts":       len(logs),
+		"logs":           logs,
 	})
 }
 

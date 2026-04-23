@@ -22,6 +22,7 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store) *gin.Engine {
 	protected.Use(auth.RequireAPIKey(store))
 	{
 		protected.GET("/transaction/:id", webHook.GetTransaction)
+		protected.GET("/transactions/:id/deliveries", webHook.GetDeliveryLogs)
 		protected.GET("/transactions", webHook.ListTransactions)
 	}
 	return r

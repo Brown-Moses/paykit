@@ -12,7 +12,7 @@ import (
 	"github.com/Brown-Moses/paykit/pkg/momodto"
 )
 
-func NotifyMerchant(merchant *storage.Merchant, transaction *storage.Transaction) {
+func NotifyMerchant(db *storage.Store, merchant *storage.Merchant, transaction *storage.Transaction) {
 	if merchant.WebhookURL == "" {
 		return
 	}
@@ -42,30 +42,55 @@ func NotifyMerchant(merchant *storage.Merchant, transaction *storage.Transaction
 			time.Sleep(wait)
 		}
 
-		err := postWebhook(merchant.WebhookURL, body)
+		deliveryLog := storage.DeliveryLog{
+			TransactionID: transaction.ID,
+			MerchantID:    merchant.ID,
+			WebhookURL:    merchant.WebhookURL,
+			Attempt:       attempt,
+		}
+
+		responseCode, err := postWebhook(merchant.WebhookURL, body)
+		deliveryLog.ResponseCode = responseCode
+
+		if err == nil {
+			deliveryLog.Status = storage.DeliveryStatusSuccess
+			db.InsertDeliveryLog(deliveryLog)
+			log.Printf("notifier: delivered to %s for transaction %s on attempt %d",
+				merchant.WebhookURL, transaction.ProviderTxID, attempt)
+			return
+		}
+
 		if err == nil {
 			log.Printf("notifier: delivered to %s for tx %s", merchant.WebhookURL, transaction.ProviderTxID)
 			return
 		}
+		// Last attempt
+		if attempt == 3 {
+			deliveryLog.Status = storage.DeliveryStatusFailed
+		} else {
+			deliveryLog.Status = storage.DeliveryStatusRetrying
+		}
 
-		log.Printf("notifier: attempt %d failed for %s: %v", attempt+1, transaction.ProviderTxID, err)
+		deliveryLog.ErrorMessage = err.Error()
+		db.InsertDeliveryLog(deliveryLog)
+		log.Printf("notifier: attempt %d failed for %s: %v", attempt, transaction.ProviderTxID, err)
 	}
 
-	log.Printf("notifier: all retries exhausted for transaction %s — merchant not notified", transaction.ProviderTxID)
+	log.Printf("notifier: all retries exhausted for transaction %s", transaction.ProviderTxID)
 }
 
-func postWebhook(url string, body []byte) error {
+func postWebhook(url string, body []byte) (int, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("merchant returned non-2xx: %d", resp.StatusCode)
+		return resp.StatusCode, fmt.Errorf("merchant returned non-2xx: %d", resp.StatusCode)
 	}
 
-	return nil
+	return resp.StatusCode, nil
 }

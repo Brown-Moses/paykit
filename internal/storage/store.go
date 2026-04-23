@@ -157,3 +157,55 @@ func (s *Store) GetMerchantByID(id int64) (*Merchant, error) {
 	}
 	return m, nil
 }
+
+func (s *Store) InsertDeliveryLog(log DeliveryLog) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`INSERT INTO delivery_logs
+			(transaction_id, merchant_id, webhook_url, attempt, status, response_code, error_message)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		log.TransactionID,
+		log.MerchantID,
+		log.WebhookURL,
+		log.Attempt,
+		log.Status,
+		log.ResponseCode,
+		log.ErrorMessage,
+	)
+	return err
+}
+
+func (s *Store) GetDeliveryLogs(transactionID int64) ([]DeliveryLog, error) {
+	rows, err := s.db.Query(
+		context.Background(),
+		`SELECT id, transaction_id, merchant_id, webhook_url, attempt, status, response_code, error_message, delivered_at
+		 FROM delivery_logs
+		WHERE transaction_id = $1 
+		ORDER BY delivered_at DESC`,
+		transactionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []DeliveryLog
+	for rows.Next() {
+		var log DeliveryLog
+		if err := rows.Scan(
+			&log.ID,
+			&log.TransactionID,
+			&log.MerchantID,
+			&log.WebhookURL,
+			&log.Attempt,
+			&log.Status,
+			&log.ResponseCode,
+			&log.ErrorMessage,
+			&log.DeliveredAt,
+		); err != nil {
+			return nil, err
+		}
+		logs = append(logs, log)
+	}
+	return logs, nil
+}

@@ -33,3 +33,6 @@ db-backup:
 
 db-restore FILE=:
 	cat $(FILE) | docker exec -i paykit_postgres psql -U paykit -d paykit
+
+swag:
+	swag init -g cmd/paykit/main.go --output docs

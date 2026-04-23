@@ -39,3 +39,22 @@ CREATE INDEX idx_transactions_external_id   ON transactions(external_id);
 CREATE INDEX idx_transactions_status        ON transactions(status);
 CREATE INDEX idx_transactions_received_at   ON transactions(received_at DESC);
 
+
+CREATE TYPE delivery_status AS ENUM ('SUCCESS', 'FAILED', 'RETRYING');
+
+CREATE TABLE IF NOT EXISTS delivery_logs (
+    id              BIGSERIAL PRIMARY KEY,
+    transaction_id  BIGINT      NOT NULL REFERENCES transactions(id),
+    merchant_id     BIGINT      NOT NULL REFERENCES merchants(id),
+    webhook_url     TEXT        NOT NULL,
+    attempt         INT         NOT NULL DEFAULT 1,
+    status          delivery_status NOT NULL,
+    response_code   INT,                        -- HTTP status merchant returned
+    error_message   TEXT,                       -- network error if any
+    delivered_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_delivery_logs_transaction_id ON delivery_logs(transaction_id);
+CREATE INDEX idx_delivery_logs_merchant_id    ON delivery_logs(merchant_id);
+
+

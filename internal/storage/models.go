@@ -34,3 +34,31 @@ type Merchant struct {
 	Active     bool
 	CreatedAt  time.Time
 }
+
+type NotifyPayload struct {
+	ExternalID string `json:"external_id"`
+	Status     string `json:"status"`
+	Amount     string `json:"amount"`
+	Currency   string `json:"currency"`
+	Paid       bool   `json:"paid"`
+}
+
+type DeliveryStatus string
+
+const (
+	DeliveryStatusSuccess  DeliveryStatus = "SUCCESS"
+	DeliveryStatusFailed   DeliveryStatus = "FAILED"
+	DeliveryStatusRetrying DeliveryStatus = "RETRYING"
+)
+
+type DeliveryLog struct {
+	ID            int64
+	TransactionID int64
+	MerchantID    int64
+	WebhookURL    string
+	Attempt       int
+	Status        DeliveryStatus
+	ResponseCode  int
+	ErrorMessage  string
+	DeliveredAt   time.Time
+}
