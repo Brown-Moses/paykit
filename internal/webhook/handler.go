@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"encoding/json"
 
@@ -17,14 +18,16 @@ import (
 )
 
 type Handler struct {
-	verifier *auth.Verifier
-	store    *storage.Store
+	verifier  *auth.Verifier
+	store     *storage.Store
+	startTime time.Time
 }
 
-func NewHandler(verifier *auth.Verifier, store *storage.Store) *Handler {
+func NewHandler(verifier *auth.Verifier, store *storage.Store, startTime time.Time) *Handler {
 	return &Handler{
-		verifier: verifier,
-		store:    store,
+		verifier:  verifier,
+		store:     store,
+		startTime: startTime,
 	}
 }
 
@@ -237,10 +240,14 @@ func (h *Handler) GetDeliveryLogs(c *gin.Context) {
 // @Failure      503  {object}  object{status=string,database=string}
 // @Router       /health [get]
 func (h *Handler) Health(c *gin.Context) {
+	uptime := time.Since(h.startTime).Round(time.Second).String()
+
 	if err := h.store.Ping(); err != nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status":   "degraded",
 			"database": "unreachable",
+			"version":  "1.0.0",
+			"uptime":   uptime,
 		})
 		return
 	}
@@ -248,6 +255,8 @@ func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":   "ok",
 		"database": "connected",
+		"version":  "1.0.0",
+		"uptime":   uptime,
 	})
 }
 

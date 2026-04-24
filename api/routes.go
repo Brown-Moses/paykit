@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -11,11 +13,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(verifier *auth.Verifier, store *storage.Store) *gin.Engine {
+func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Time) *gin.Engine {
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
 
-	webHook := webhooks.NewHandler(verifier, store)
+	webHook := webhooks.NewHandler(verifier, store, startTime)
 
 	// System
 	r.GET("/health", webHook.Health)
