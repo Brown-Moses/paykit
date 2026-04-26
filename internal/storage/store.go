@@ -214,3 +214,31 @@ func (s *Store) GetDeliveryLogs(transactionID int64) ([]DeliveryLog, error) {
 	}
 	return logs, nil
 }
+
+func (s *Store) GetMetrics() (*Metrics, error) {
+	metrics := &Metrics{}
+
+	err := s.db.QueryRow(context.Background(),
+		`SELECT
+            COUNT(*)                                          AS total,
+            COUNT(*) FILTER (WHERE status = 'SUCCESSFUL')    AS successful,
+            COUNT(*) FILTER (WHERE status = 'FAILED')        AS failed
+         FROM transactions`,
+	).Scan(
+		&metrics.TransactionsTotal,
+		&metrics.TransactionsSuccessful,
+		&metrics.TransactionsFailed,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if metrics.TransactionsTotal > 0 {
+		rate := float64(metrics.TransactionsSuccessful) / float64(metrics.TransactionsTotal) * 100
+		metrics.DeliverySuccessRate = fmt.Sprintf("%.1f%%", rate)
+	} else {
+		metrics.DeliverySuccessRate = "N/A"
+	}
+
+	return metrics, nil
+}

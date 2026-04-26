@@ -62,3 +62,10 @@ type DeliveryLog struct {
 	ErrorMessage  string
 	DeliveredAt   time.Time
 }
+
+type Metrics struct {
+	TransactionsTotal      int
+	TransactionsSuccessful int
+	TransactionsFailed     int
+	DeliverySuccessRate    string
+}

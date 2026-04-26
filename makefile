@@ -39,3 +39,6 @@ swagger:
 
 health:
 	curl -s http://localhost:8080/health | jq
+
+metrics:
+	curl -s http://localhost:8080/metrics | jq

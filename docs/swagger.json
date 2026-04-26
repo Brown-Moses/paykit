@@ -51,6 +51,54 @@
                 }
             }
         },
+        "/metrics": {
+            "get": {
+                "description": "Returns transaction volume and delivery success rate.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "System metrics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "delivery_success_rate": {
+                                    "type": "string"
+                                },
+                                "transactions_failed": {
+                                    "type": "integer"
+                                },
+                                "transactions_successful": {
+                                    "type": "integer"
+                                },
+                                "transactions_total": {
+                                    "type": "integer"
+                                },
+                                "uptime": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/transactions": {
             "get": {
                 "security": [

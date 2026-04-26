@@ -26,8 +26,15 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Public
-	r.POST("/webhook/momo/:merchant_id", webHook.HandleMoMoWebhook)
+	//  r.POST("/webhook/momo/:merchant_id", webHook.HandleMoMoWebhook)
 	r.POST("/merchants", webHook.CreateMerchant)
+	r.GET("/metrics", webHook.Metrics)
+
+	// Webhook — IP whitelisted, no API key needed
+	r.POST("/webhook/momo/:merchant_id",
+		auth.IPWhitelist(),
+		webHook.HandleMoMoWebhook,
+	)
 
 	// Protected — all plural, all consistent
 	protected := r.Group("/")

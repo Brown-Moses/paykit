@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -30,7 +30,7 @@ func NotifyMerchant(db *storage.Store, merchant *storage.Merchant, transaction *
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		log.Println("notifier: failed to marshal payload for %s: %v", transaction.ProviderTxID, err)
+		slog.Warn("notifier: failed to marshal payload for %s: %v", transaction.ProviderTxID, err)
 		return
 	}
 
@@ -38,7 +38,7 @@ func NotifyMerchant(db *storage.Store, merchant *storage.Merchant, transaction *
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			wait := time.Duration(1<<attempt) * time.Second
-			log.Printf("notifier: retry %d for %s - waiting %s", attempt, transaction.ProviderTxID, wait)
+			slog.Warn("notifier: retry %d for %s - waiting %s", attempt, transaction.ProviderTxID, wait)
 			time.Sleep(wait)
 		}
 
@@ -55,13 +55,13 @@ func NotifyMerchant(db *storage.Store, merchant *storage.Merchant, transaction *
 		if err == nil {
 			deliveryLog.Status = storage.DeliveryStatusSuccess
 			db.InsertDeliveryLog(deliveryLog)
-			log.Printf("notifier: delivered to %s for transaction %s on attempt %d",
+			slog.Info("notifier: delivered to %s for transaction %s on attempt %d",
 				merchant.WebhookURL, transaction.ProviderTxID, attempt)
 			return
 		}
 
 		if err == nil {
-			log.Printf("notifier: delivered to %s for tx %s", merchant.WebhookURL, transaction.ProviderTxID)
+			slog.Info("notifier: delivered to %s for tx %s", merchant.WebhookURL, transaction.ProviderTxID)
 			return
 		}
 		// Last attempt
@@ -73,10 +73,10 @@ func NotifyMerchant(db *storage.Store, merchant *storage.Merchant, transaction *
 
 		deliveryLog.ErrorMessage = err.Error()
 		db.InsertDeliveryLog(deliveryLog)
-		log.Printf("notifier: attempt %d failed for %s: %v", attempt, transaction.ProviderTxID, err)
+		slog.Warn("notifier: attempt %d failed for %s: %v", attempt, transaction.ProviderTxID, err)
 	}
 
-	log.Printf("notifier: all retries exhausted for transaction %s", transaction.ProviderTxID)
+	slog.Error("notifier: all retries exhausted for transaction %s", transaction.ProviderTxID)
 }
 
 func postWebhook(url string, body []byte) (int, error) {

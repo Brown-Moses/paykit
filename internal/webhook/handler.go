@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -71,7 +71,7 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		case errors.Is(err, auth.ErrReplay):
 			// Return 200 — MTN retries on anything else
-			log.Printf("replay detected for tx %s — ignoring", raw.TransactionID)
+			slog.Warn("replay detected for tx %s — ignoring", raw.TransactionID)
 			c.Status(http.StatusOK)
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "verification failed"})
@@ -88,7 +88,7 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 
 	// 5. Save to Postgres
 	if err := h.store.Insert(*transaction); err != nil {
-		log.Printf("failed to insert transaction %s: %v", transaction.ProviderTxID, err)
+		slog.Error("failed to insert transaction %s: %v", transaction.ProviderTxID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save transaction"})
 		return
 	}
@@ -98,11 +98,11 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		if err == nil {
 			go payments.NotifyMerchant(h.store, merchant, transaction)
 		} else {
-			log.Printf("notifier: could not find merchant %d: %v", transaction.MerchantID, err)
+			slog.Info("notifier: could not find merchant %d: %v", transaction.MerchantID, err)
 		}
 	}
 
-	log.Printf("transaction %s received — external_id: %s amount: %s %s",
+	slog.Info("transaction %s received — external_id: %s amount: %s %s",
 		transaction.ProviderTxID, transaction.ExternalID, transaction.Amount, transaction.Currency)
 
 	c.Status(http.StatusOK)
@@ -257,6 +257,30 @@ func (h *Handler) Health(c *gin.Context) {
 		"database": "connected",
 		"version":  "1.0.0",
 		"uptime":   uptime,
+	})
+}
+
+// Metrics godoc
+// @Summary      System metrics
+// @Description  Returns transaction volume and delivery success rate.
+// @Tags         System
+// @Produce      json
+// @Success      200  {object}  object{transactions_total=int,transactions_successful=int,transactions_failed=int,delivery_success_rate=string,uptime=string}
+// @Failure      500  {object}  object{error=string}
+// @Router       /metrics [get]
+func (h *Handler) Metrics(c *gin.Context) {
+	metrics, err := h.store.GetMetrics()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch metrics"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"transactions_total":      metrics.TransactionsTotal,
+		"transactions_successful": metrics.TransactionsSuccessful,
+		"transactions_failed":     metrics.TransactionsFailed,
+		"delivery_success_rate":   metrics.DeliverySuccessRate,
+		"uptime":                  time.Since(h.startTime).Round(time.Second).String(),
 	})
 }
 
