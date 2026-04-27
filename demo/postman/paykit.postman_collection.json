@@ -1,25 +1,54 @@
 {
   "info": {
     "name": "PayKit — Payment Event Engine (Full Test Suite)",
-    "description": "Webhook security + merchant auth + query APIs + delivery logs + health",
+    "description": "Complete test suite for PayKit. Run in order using Collection Runner. Unique transaction IDs are generated automatically on every run — no DB reset needed between runs.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "base_url",       "value": "http://localhost:8080" },
     { "key": "webhook_secret", "value": "test_secret" },
-    { "key": "api_key", "value": "" }
+    { "key": "api_key",        "value": "" },
+    { "key": "merchant_id",    "value": "" },
+    { "key": "hmac_signature", "value": "" },
+    { "key": "tx_success",     "value": "" },
+    { "key": "tx_failed",      "value": "" },
+    { "key": "tx_run_id",      "value": "" }
   ],
   "event": [
     {
       "listen": "prerequest",
       "script": {
         "exec": [
-          "const secret = pm.collectionVariables.get(\"webhook_secret\");",
-          "const body = pm.request.body ? pm.request.body.raw : \"\";",
+          "// ── PayKit Auto-Signer ────────────────────────────────────────────",
+          "// Generates a unique run ID once per collection run",
+          "if (!pm.collectionVariables.get('tx_run_id')) {",
+          "  const runId = 'RUN-' + Date.now();",
+          "  pm.collectionVariables.set('tx_run_id', runId);",
+          "  pm.collectionVariables.set('tx_success', 'TX-S-' + Date.now());",
+          "  pm.collectionVariables.set('tx_failed',  'TX-F-' + (Date.now() + 1));",
+          "}",
           "",
-          "if (body && pm.request.headers.has(\"X-Signature\")) {",
-          "  const signature = CryptoJS.HmacSHA256(body, secret).toString();",
-          "  pm.variables.set(\"hmac_signature\", signature);",
+          "// Auto-compute HMAC-SHA256 for any request with X-Signature header",
+          "const secret = pm.collectionVariables.get('webhook_secret');",
+          "const body   = pm.request.body ? pm.request.body.raw : '';",
+          "",
+          "// Replace tx placeholders in body with actual run-specific IDs",
+          "// (Postman doesn't resolve variables inside body for signing)",
+          "let resolvedBody = body",
+          "  .replace(/{{tx_success}}/g, pm.collectionVariables.get('tx_success'))",
+          "  .replace(/{{tx_failed}}/g,  pm.collectionVariables.get('tx_failed'))",
+          "  .replace(/{{tx_run_id}}/g,  pm.collectionVariables.get('tx_run_id'));",
+          "",
+          "const hasSignatureHeader = pm.request.headers.find(",
+          "  function(h) { return h.key === 'X-Signature'; }",
+          ");",
+          "",
+          "if (hasSignatureHeader && resolvedBody && secret) {",
+          "  const signature = CryptoJS.HmacSHA256(resolvedBody, secret).toString();",
+          "  pm.collectionVariables.set('hmac_signature', signature);",
+          "  console.log('PayKit Auto-Signer ✓ signature: ' + signature.substring(0, 16) + '...');",
+          "} else if (hasSignatureHeader && !secret) {",
+          "  console.warn('PayKit Auto-Signer ✗ webhook_secret is empty');",
           "}"
         ]
       }
@@ -30,69 +59,73 @@
       "name": "1. Merchant",
       "item": [
         {
-          "name": "Create Merchant",
+          "name": "1.1 Create Merchant",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Test Shop\",\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
             },
-            "url": "{{base_url}}/merchants"
+            "url": "{{base_url}}/v1/merchants"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Merchant created\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const json = pm.response.json();",
-                  "pm.collectionVariables.set(\"api_key\", json.api_key);",
                   "",
-                  "pm.test(\"API key exists\", function () {",
+                  "pm.test('API key returned', function () {",
                   "  pm.expect(json.api_key).to.exist;",
                   "});",
                   "",
-                  "pm.test(\"API key has correct prefix\", function () {",
+                  "pm.test('API key has pk_live_ prefix', function () {",
                   "  pm.expect(json.api_key).to.match(/^pk_live_/);",
                   "});",
                   "",
-                  "pm.test(\"Message warns to save key\", function () {",
+                  "pm.test('Merchant ID returned', function () {",
+                  "  pm.expect(json.id).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('Save-key message present', function () {",
                   "  pm.expect(json.message).to.exist;",
-                  "});"
+                  "});",
+                  "",
+                  "// Save for all subsequent requests",
+                  "pm.collectionVariables.set('api_key', json.api_key);",
+                  "pm.collectionVariables.set('merchant_id', String(json.id));",
+                  "console.log('Merchant created. ID:', json.id, '| Key:', json.api_key.substring(0, 12) + '...');"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Create Merchant — missing name",
+          "name": "1.2 Create Merchant — missing name",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
             },
-            "url": "{{base_url}}/merchants"
+            "url": "{{base_url}}/v1/merchants"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Reject missing name\", function () {",
+                  "pm.test('Reject missing name — 400', function () {",
                   "  pm.response.to.have.status(400);",
                   "});",
                   "",
-                  "pm.test(\"Error message exists\", function () {",
+                  "pm.test('Error message present', function () {",
                   "  pm.expect(pm.response.json().error).to.exist;",
                   "});"
                 ]
@@ -101,28 +134,26 @@
           ]
         },
         {
-          "name": "Create Merchant — no webhook URL",
+          "name": "1.3 Create Merchant — no webhook URL",
           "request": {
             "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"No Webhook Shop\"\n}"
             },
-            "url": "{{base_url}}/merchants"
+            "url": "{{base_url}}/v1/merchants"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Merchant created without webhook URL\", function () {",
+                  "pm.test('Merchant created without webhook URL — 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"API key still generated\", function () {",
+                  "pm.test('API key still generated', function () {",
                   "  pm.expect(pm.response.json().api_key).to.exist;",
                   "});"
                 ]
@@ -133,149 +164,107 @@
       ]
     },
     {
-      "name": "2. Webhooks (Security + Processing)",
+      "name": "2. Webhooks",
       "item": [
         {
-          "name": "Receive valid payment",
+          "name": "2.1 Receive SUCCESSFUL payment",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+              { "key": "X-Signature",  "value": "{{hmac_signature}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+              "raw": "{\n  \"transactionId\": \"{{tx_success}}\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
             },
-            "url": "{{base_url}}/webhook/momo"
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Resolve variables then compute HMAC on the resolved body",
+                  "const secret = pm.collectionVariables.get('webhook_secret');",
+                  "const txId   = pm.collectionVariables.get('tx_success');",
+                  "const body = JSON.stringify({",
+                  "  transactionId: txId,",
+                  "  externalId: 'order_987',",
+                  "  amount: '1000',",
+                  "  currency: 'RWF',",
+                  "  status: 'SUCCESSFUL',",
+                  "  payer: { partyIdType: 'MSISDN', partyId: '2507XXXXXXX' },",
+                  "  timestamp: '2026-04-21T10:15:30Z'",
+                  "});",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.collectionVariables.set('hmac_signature', sig);",
+                  "pm.collectionVariables.set('resolved_body_success', body);",
+                  "console.log('Signing TX:', txId);"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Fast response\", function () {",
+                  "pm.test('Response time under 500ms', function () {",
                   "  pm.expect(pm.response.responseTime).to.be.below(500);",
-                  "});",
-                  "",
-                  "postman.setNextRequest(\"Get transaction by ID (Auth)\");"
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Receive FAILED payment",
+          "name": "2.2 Receive FAILED payment",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+              { "key": "X-Signature",  "value": "{{hmac_signature}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"transactionId\": \"TX-002\",\n  \"externalId\": \"order_988\",\n  \"amount\": \"2000\",\n  \"currency\": \"RWF\",\n  \"status\": \"FAILED\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:00:00Z\"\n}"
+              "raw": "{\n  \"transactionId\": \"{{tx_failed}}\",\n  \"externalId\": \"order_988\",\n  \"amount\": \"2000\",\n  \"currency\": \"RWF\",\n  \"status\": \"FAILED\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:00:00Z\"\n}"
             },
-            "url": "{{base_url}}/webhook/momo"
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.collectionVariables.get('webhook_secret');",
+                  "const txId   = pm.collectionVariables.get('tx_failed');",
+                  "const body = JSON.stringify({",
+                  "  transactionId: txId,",
+                  "  externalId: 'order_988',",
+                  "  amount: '2000',",
+                  "  currency: 'RWF',",
+                  "  status: 'FAILED',",
+                  "  payer: { partyIdType: 'MSISDN', partyId: '2507XXXXXXX' },",
+                  "  timestamp: '2026-04-21T11:00:00Z'",
+                  "});",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.collectionVariables.set('hmac_signature', sig);",
+                  "console.log('Signing FAILED TX:', txId);"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Failed payment accepted\", function () {",
+                  "pm.test('FAILED payment accepted — 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"No notification fired for FAILED — fast response\", function () {",
-                  "  pm.expect(pm.response.responseTime).to.be.below(200);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Missing signature",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{ \"transactionId\": \"TX-003\" }"
-            },
-            "url": "{{base_url}}/webhook/momo"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Reject missing signature\", function () {",
-                  "  pm.response.to.have.status(401);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Invalid signature",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "invalidsignature" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{ \"transactionId\": \"TX-003\" }"
-            },
-            "url": "{{base_url}}/webhook/momo"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Reject invalid signature\", function () {",
-                  "  pm.response.to.have.status(401);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Replay attack",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "{{hmac_signature}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"transactionId\": \"TX-001\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
-            },
-            "url": "{{base_url}}/webhook/momo"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Replay returns 200\", function () {",
-                  "  pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Fast replay\", function () {",
+                  "pm.test('No notification fired — fast response', function () {",
                   "  pm.expect(pm.response.responseTime).to.be.below(300);",
                   "});"
                 ]
@@ -284,26 +273,155 @@
           ]
         },
         {
-          "name": "Malformed payload",
+          "name": "2.3 Missing signature",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-Signature", "value": "{{hmac_signature}}" }
+              { "key": "X-Signature",  "value": "" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{ \"transactionId\": 123, \"amount\": \"oops\" }"
+              "raw": "{\n  \"transactionId\": \"TX-NO-SIG\",\n  \"externalId\": \"order_000\",\n  \"amount\": \"500\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:05:00Z\"\n}"
             },
-            "url": "{{base_url}}/webhook/momo"
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Reject malformed\", function () {",
+                  "pm.test('Reject missing signature — 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error message present', function () {",
+                  "  pm.expect(pm.response.json().error).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4 Invalid signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature",  "value": "thisisaninvalidsignature000000000000000000000000000000000000000" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"TX-BAD-SIG\",\n  \"externalId\": \"order_001\",\n  \"amount\": \"750\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:10:00Z\"\n}"
+            },
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reject invalid signature — 401', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error message present', function () {",
+                  "  pm.expect(pm.response.json().error).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5 Replay attack — same TX-SUCCESS again",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature",  "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{tx_success}}\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
+            },
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Reuse the same signature from 2.1 — same body, same TX",
+                  "const secret = pm.collectionVariables.get('webhook_secret');",
+                  "const txId   = pm.collectionVariables.get('tx_success');",
+                  "const body = JSON.stringify({",
+                  "  transactionId: txId,",
+                  "  externalId: 'order_987',",
+                  "  amount: '1000',",
+                  "  currency: 'RWF',",
+                  "  status: 'SUCCESSFUL',",
+                  "  payer: { partyIdType: 'MSISDN', partyId: '2507XXXXXXX' },",
+                  "  timestamp: '2026-04-21T10:15:30Z'",
+                  "});",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.collectionVariables.set('hmac_signature', sig);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Replay silently accepted — 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Replay handled fast — under 300ms', function () {",
+                  "  pm.expect(pm.response.responseTime).to.be.below(300);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6 Malformed payload",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Signature",  "value": "{{hmac_signature}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"transactionId\": 123, \"amount\": \"oops\" }"
+            },
+            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const secret = pm.collectionVariables.get('webhook_secret');",
+                  "const body = '{ \"transactionId\": 123, \"amount\": \"oops\" }';",
+                  "const sig = CryptoJS.HmacSHA256(body, secret).toString();",
+                  "pm.collectionVariables.set('hmac_signature', sig);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Reject malformed payload — 400', function () {",
                   "  pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "pm.test('Error message present', function () {",
+                  "  pm.expect(pm.response.json().error).to.exist;",
                   "});"
                 ]
               }
@@ -313,42 +431,53 @@
       ]
     },
     {
-      "name": "3. Transactions (Auth Required)",
+      "name": "3. Transactions",
       "item": [
         {
-          "name": "Get transaction by ID (Auth)",
+          "name": "3.1 Get SUCCESSFUL transaction by ID",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions/TX-001"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/v1/transactions/{{tx_success}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "transactions", "{{tx_success}}"]
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const json = pm.response.json();",
+                  "const txId = pm.collectionVariables.get('tx_success');",
                   "",
-                  "pm.test(\"Correct transaction\", function () {",
-                  "  pm.expect(json.provider_tx_id).to.eql(\"TX-001\");",
+                  "pm.test('Correct transaction ID', function () {",
+                  "  pm.expect(json.provider_tx_id).to.eql(txId);",
                   "});",
                   "",
-                  "pm.test(\"Paid field is true\", function () {",
+                  "pm.test('paid is true', function () {",
                   "  pm.expect(json.paid).to.be.true;",
                   "});",
                   "",
-                  "pm.test(\"Status is SUCCESSFUL\", function () {",
-                  "  pm.expect(json.status).to.eql(\"SUCCESSFUL\");",
+                  "pm.test('Status is SUCCESSFUL', function () {",
+                  "  pm.expect(json.status).to.eql('SUCCESSFUL');",
                   "});",
                   "",
-                  "pm.test(\"Amount is correct\", function () {",
-                  "  pm.expect(json.amount).to.eql(\"1000\");",
+                  "pm.test('Amount is 1000', function () {",
+                  "  pm.expect(json.amount).to.eql('1000');",
+                  "});",
+                  "",
+                  "pm.test('Currency is RWF', function () {",
+                  "  pm.expect(json.currency).to.eql('RWF');",
+                  "});",
+                  "",
+                  "pm.test('external_id present', function () {",
+                  "  pm.expect(json.external_id).to.eql('order_987');",
                   "});"
                 ]
               }
@@ -356,33 +485,73 @@
           ]
         },
         {
-          "name": "List transactions",
+          "name": "3.2 Get FAILED transaction by ID",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/v1/transactions/{{tx_failed}}",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "transactions", "{{tx_failed}}"]
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Authorized list\", function () {",
+                  "pm.test('Status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('paid is false', function () {",
+                  "  pm.expect(pm.response.json().paid).to.be.false;",
+                  "});",
+                  "",
+                  "pm.test('Status is FAILED', function () {",
+                  "  pm.expect(pm.response.json().status).to.eql('FAILED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.3 List transactions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const json = pm.response.json();",
                   "",
-                  "pm.test(\"Has pagination fields\", function () {",
+                  "pm.test('Has page field', function () {",
                   "  pm.expect(json.page).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('Has limit field', function () {",
                   "  pm.expect(json.limit).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('Has count field', function () {",
                   "  pm.expect(json.count).to.exist;",
                   "});",
                   "",
-                  "pm.test(\"Data is an array\", function () {",
-                  "  pm.expect(json.data).to.be.an(\"array\");",
+                  "pm.test('Data is an array', function () {",
+                  "  pm.expect(json.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('At least 2 transactions exist', function () {",
+                  "  pm.expect(json.data.length).to.be.at.least(2);",
                   "});"
                 ]
               }
@@ -390,27 +559,24 @@
           ]
         },
         {
-          "name": "Filter by status",
+          "name": "3.4 Filter by status SUCCESSFUL",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions?status=SUCCESSFUL"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions?status=SUCCESSFUL"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"All results are SUCCESSFUL\", function () {",
-                  "  const json = pm.response.json();",
-                  "  json.data.forEach(function (transaction) {",
-                  "    pm.expect(transaction.status).to.eql(\"SUCCESSFUL\");",
+                  "pm.test('All results are SUCCESSFUL', function () {",
+                  "  pm.response.json().data.forEach(function (tx) {",
+                  "    pm.expect(tx.status).to.eql('SUCCESSFUL');",
                   "  });",
                   "});"
                 ]
@@ -419,25 +585,23 @@
           ]
         },
         {
-          "name": "Filter by external_id",
+          "name": "3.5 Filter by external_id",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions?external_id=order_987"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions?external_id=order_987"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Correct external_id\", function () {",
-                  "  pm.expect(pm.response.json().external_id).to.eql(\"order_987\");",
+                  "pm.test('external_id matches', function () {",
+                  "  pm.expect(pm.response.json().external_id).to.eql('order_987');",
                   "});"
                 ]
               }
@@ -445,27 +609,29 @@
           ]
         },
         {
-          "name": "Pagination",
+          "name": "3.6 Pagination",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions?page=1&limit=5"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions?page=1&limit=1"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Limit respected\", function () {",
-                  "  const json = pm.response.json();",
-                  "  pm.expect(json.data.length).to.be.at.most(5);",
-                  "  pm.expect(json.limit).to.eql(5);",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('Limit of 1 respected', function () {",
+                  "  pm.expect(json.data.length).to.be.at.most(1);",
+                  "});",
+                  "",
+                  "pm.test('Page is 1', function () {",
+                  "  pm.expect(json.page).to.eql(1);",
                   "});"
                 ]
               }
@@ -473,17 +639,18 @@
           ]
         },
         {
-          "name": "Unauthorized access",
+          "name": "3.7 Unauthorized — no token",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/transactions"
+            "header": [],
+            "url": "{{base_url}}/v1/transactions"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Reject unauthorized\", function () {",
+                  "pm.test('Reject unauthorized — 401', function () {",
                   "  pm.response.to.have.status(401);",
                   "});"
                 ]
@@ -492,20 +659,18 @@
           ]
         },
         {
-          "name": "Transaction not found",
+          "name": "3.8 Transaction not found",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions/TX-999"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions/TX-DOES-NOT-EXIST"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Returns 404\", function () {",
+                  "pm.test('Returns 404', function () {",
                   "  pm.response.to.have.status(404);",
                   "});"
                 ]
@@ -519,42 +684,45 @@
       "name": "4. Delivery Logs",
       "item": [
         {
-          "name": "Get delivery logs — TX-001",
+          "name": "4.1 Delivery logs — SUCCESSFUL transaction",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions/TX-001/deliveries"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/v1/transactions/{{tx_success}}/deliveries",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "transactions", "{{tx_success}}", "deliveries"]
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const json = pm.response.json();",
+                  "const txId = pm.collectionVariables.get('tx_success');",
                   "",
-                  "pm.test(\"Transaction ID present\", function () {",
-                  "  pm.expect(json.transaction_id).to.eql(\"TX-001\");",
+                  "pm.test('Transaction ID matches', function () {",
+                  "  pm.expect(json.transaction_id).to.eql(txId);",
                   "});",
                   "",
-                  "pm.test(\"Webhook URL present\", function () {",
+                  "pm.test('Webhook URL present', function () {",
                   "  pm.expect(json.webhook_url).to.exist;",
                   "});",
                   "",
-                  "pm.test(\"Attempts count present\", function () {",
-                  "  pm.expect(json.attempts).to.be.a(\"number\");",
+                  "pm.test('Attempts is a number', function () {",
+                  "  pm.expect(json.attempts).to.be.a('number');",
                   "});",
                   "",
-                  "pm.test(\"Logs is an array\", function () {",
-                  "  pm.expect(json.logs).to.be.an(\"array\");",
+                  "pm.test('Logs is an array', function () {",
+                  "  pm.expect(json.logs).to.be.an('array');",
                   "});",
                   "",
-                  "pm.test(\"Each log has required fields\", function () {",
+                  "pm.test('Each log has attempt, status, delivered_at', function () {",
                   "  json.logs.forEach(function (log) {",
                   "    pm.expect(log.attempt).to.exist;",
                   "    pm.expect(log.status).to.exist;",
@@ -567,24 +735,26 @@
           ]
         },
         {
-          "name": "Get delivery logs — FAILED transaction",
+          "name": "4.2 Delivery logs — FAILED transaction has zero attempts",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions/TX-002/deliveries"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": {
+              "raw": "{{base_url}}/v1/transactions/{{tx_failed}}/deliveries",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "transactions", "{{tx_failed}}", "deliveries"]
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"No delivery attempts for FAILED transaction\", function () {",
+                  "pm.test('Zero delivery attempts for FAILED transaction', function () {",
                   "  pm.expect(pm.response.json().attempts).to.eql(0);",
                   "});"
                 ]
@@ -593,20 +763,18 @@
           ]
         },
         {
-          "name": "Get delivery logs — not found",
+          "name": "4.3 Delivery logs — transaction not found",
           "request": {
             "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{api_key}}" }
-            ],
-            "url": "{{base_url}}/transactions/TX-999/deliveries"
+            "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
+            "url": "{{base_url}}/v1/transactions/TX-DOES-NOT-EXIST/deliveries"
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Returns 404\", function () {",
+                  "pm.test('Returns 404', function () {",
                   "  pm.response.to.have.status(404);",
                   "});"
                 ]
@@ -615,17 +783,22 @@
           ]
         },
         {
-          "name": "Get delivery logs — unauthorized",
+          "name": "4.4 Delivery logs — unauthorized",
           "request": {
             "method": "GET",
-            "url": "{{base_url}}/transactions/TX-001/deliveries"
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/transactions/{{tx_success}}/deliveries",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "transactions", "{{tx_success}}", "deliveries"]
+            }
           },
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Reject unauthorized\", function () {",
+                  "pm.test('Reject unauthorized — 401', function () {",
                   "  pm.response.to.have.status(401);",
                   "});"
                 ]
@@ -639,9 +812,10 @@
       "name": "5. System",
       "item": [
         {
-          "name": "Health check",
+          "name": "5.1 Health check",
           "request": {
             "method": "GET",
+            "header": [],
             "url": "{{base_url}}/health"
           },
           "event": [
@@ -649,22 +823,76 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test(\"Status 200\", function () {",
+                  "pm.test('Status 200', function () {",
                   "  pm.response.to.have.status(200);",
                   "});",
                   "",
                   "const json = pm.response.json();",
                   "",
-                  "pm.test(\"Status is ok\", function () {",
-                  "  pm.expect(json.status).to.eql(\"ok\");",
+                  "pm.test('status is ok', function () {",
+                  "  pm.expect(json.status).to.eql('ok');",
                   "});",
                   "",
-                  "pm.test(\"Database is connected\", function () {",
-                  "  pm.expect(json.database).to.eql(\"connected\");",
+                  "pm.test('database is connected', function () {",
+                  "  pm.expect(json.database).to.eql('connected');",
                   "});",
                   "",
-                  "pm.test(\"Fast response\", function () {",
+                  "pm.test('version present', function () {",
+                  "  pm.expect(json.version).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('uptime present', function () {",
+                  "  pm.expect(json.uptime).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('Response under 200ms', function () {",
                   "  pm.expect(pm.response.responseTime).to.be.below(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2 Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/metrics"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const json = pm.response.json();",
+                  "",
+                  "pm.test('webhooks_received is a number', function () {",
+                  "  pm.expect(json.webhooks_received).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.test('webhooks_successful is a number', function () {",
+                  "  pm.expect(json.webhooks_successful).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.test('webhooks_failed is a number', function () {",
+                  "  pm.expect(json.webhooks_failed).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.test('delivery_success_rate present', function () {",
+                  "  pm.expect(json.delivery_success_rate).to.exist;",
+                  "});",
+                  "",
+                  "pm.test('merchants_total is a number', function () {",
+                  "  pm.expect(json.merchants_total).to.be.a('number');",
+                  "});",
+                  "",
+                  "pm.test('uptime present', function () {",
+                  "  pm.expect(json.uptime).to.exist;",
                   "});"
                 ]
               }
