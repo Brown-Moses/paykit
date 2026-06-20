@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,8 +36,8 @@ func (s *Store) Insert(transaction Transaction) error {
 	_, err := s.db.Exec(
 		context.Background(),
 		`INSERT INTO transactions
-            (provider_tx_id, external_id, amount, currency, status, payer_msisdn, raw_payload, received_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            (provider_tx_id, external_id, amount, currency, status, payer_msisdn, raw_payload, received_at, merchant_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		transaction.ProviderTxID,
 		transaction.ExternalID,
 		transaction.Amount,
@@ -44,6 +46,7 @@ func (s *Store) Insert(transaction Transaction) error {
 		transaction.PayerMSISDN,
 		transaction.RawPayload,
 		transaction.ReceivedAt,
+		transaction.MerchantID,
 	)
 	return err
 }
@@ -67,29 +70,36 @@ func (s *Store) GetByID(providerTxID string) (*Transaction, error) {
 
 // CreateMerchant inserts a new merchant and returns their ID
 func (s *Store) CreateMerchant(m Merchant) (int64, error) {
+	hashedKey := hashAPIKey(m.APIKey)
 	var id int64
 	err := s.db.QueryRow(
 		context.Background(),
 		`INSERT INTO merchants (name, api_key, webhook_url)
          VALUES ($1, $2, $3) RETURNING id`,
-		m.Name, m.APIKey, m.WebhookURL,
+		m.Name, hashedKey, m.WebhookURL,
 	).Scan(&id)
 	return id, err
 }
 
 // GetMerchantByAPIKey finds a merchant by their API key — used in middleware
 func (s *Store) GetMerchantByAPIKey(apiKey string) (*Merchant, error) {
+	hashedKey := hashAPIKey(apiKey)
 	m := &Merchant{}
 	err := s.db.QueryRow(
 		context.Background(),
 		`SELECT id, name, api_key, webhook_url, active, created_at
          FROM merchants WHERE api_key = $1 AND active = true`,
-		apiKey,
+		hashedKey,
 	).Scan(&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active, &m.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+func hashAPIKey(key string) string {
+	h := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(h[:])
 }
 
 // GetByExternalID finds a transaction by external_id scoped to a merchant

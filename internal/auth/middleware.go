@@ -23,7 +23,7 @@ func RequireAPIKey(store *storage.Store) gin.HandlerFunc {
 
 		//expect: bearer pk_live_xxx
 		parts := strings.SplitN(header, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid Authorization format - use: Bearer pk_live_xxx",
 			})

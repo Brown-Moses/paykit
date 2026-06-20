@@ -1,6 +1,10 @@
-
--- Enum for transaction status
-CREATE TYPE tx_status AS ENUM ('PENDING', 'SUCCESSFUL', 'FAILED');
+-- Enum for transaction status (idempotent creation)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tx_status') THEN
+        CREATE TYPE tx_status AS ENUM ('PENDING', 'SUCCESSFUL', 'FAILED');
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS transactions (
     id              BIGSERIAL PRIMARY KEY,
@@ -15,7 +19,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-
 -- Merchants
 CREATE TABLE IF NOT EXISTS merchants (
     id          BIGSERIAL PRIMARY KEY,
@@ -26,21 +29,24 @@ CREATE TABLE IF NOT EXISTS merchants (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-
--- Add merchant_id to transactions
+-- Add merchant_id to transactions (idempotent creation)
 ALTER TABLE transactions
-    ADD COLUMN merchant_id BIGINT REFERENCES merchants(id);
+    ADD COLUMN IF NOT EXISTS merchant_id BIGINT REFERENCES merchants(id);
 
+-- Indexes we'll actually use (idempotent creation)
+CREATE INDEX IF NOT EXISTS idx_merchants_api_key ON merchants(api_key);
+CREATE INDEX IF NOT EXISTS idx_transactions_merchant_id ON transactions(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_external_id ON transactions(external_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+CREATE INDEX IF NOT EXISTS idx_transactions_received_at ON transactions(received_at DESC);
 
--- Indexes we'll actually use
-CREATE INDEX idx_merchants_api_key ON merchants(api_key);
-CREATE INDEX idx_transactions_merchant_id ON transactions(merchant_id);
-CREATE INDEX idx_transactions_external_id   ON transactions(external_id);
-CREATE INDEX idx_transactions_status        ON transactions(status);
-CREATE INDEX idx_transactions_received_at   ON transactions(received_at DESC);
-
-
-CREATE TYPE delivery_status AS ENUM ('SUCCESS', 'FAILED', 'RETRYING');
+-- Enum for delivery status (idempotent creation)
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'delivery_status') THEN
+        CREATE TYPE delivery_status AS ENUM ('SUCCESS', 'FAILED', 'RETRYING');
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS delivery_logs (
     id              BIGSERIAL PRIMARY KEY,
@@ -54,7 +60,5 @@ CREATE TABLE IF NOT EXISTS delivery_logs (
     delivered_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_delivery_logs_transaction_id ON delivery_logs(transaction_id);
-CREATE INDEX idx_delivery_logs_merchant_id    ON delivery_logs(merchant_id);
-
-
+CREATE INDEX IF NOT EXISTS idx_delivery_logs_transaction_id ON delivery_logs(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_logs_merchant_id ON delivery_logs(merchant_id);

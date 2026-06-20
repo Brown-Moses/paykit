@@ -47,6 +47,13 @@ func NewHandler(verifier *auth.Verifier, store *storage.Store, startTime time.Ti
 // @Router       /webhook/momo [post]
 
 func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
+	merchantIDStr := c.Param("merchant_id")
+	var merchantID int64
+	if _, err := fmt.Sscanf(merchantIDStr, "%d", &merchantID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid merchant_id in URL path"})
+		return
+	}
+
 	// 1. Read raw body — needed for HMAC and storage
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -71,7 +78,7 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid signature"})
 		case errors.Is(err, auth.ErrReplay):
 			// Return 200 — MTN retries on anything else
-			slog.Warn("replay detected for tx %s — ignoring", raw.TransactionID)
+			slog.Warn("replay detected, transaction ignored", "tx_id", raw.TransactionID)
 			c.Status(http.StatusOK)
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "verification failed"})
@@ -85,10 +92,11 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
+	transaction.MerchantID = merchantID
 
 	// 5. Save to Postgres
 	if err := h.store.Insert(*transaction); err != nil {
-		slog.Error("failed to insert transaction %s: %v", transaction.ProviderTxID, err)
+		slog.Error("failed to insert transaction", "tx_id", transaction.ProviderTxID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save transaction"})
 		return
 	}
@@ -98,12 +106,16 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		if err == nil {
 			go payments.NotifyMerchant(h.store, merchant, transaction)
 		} else {
-			slog.Info("notifier: could not find merchant %d: %v", transaction.MerchantID, err)
+			slog.Info("notifier: could not find merchant", "merchant_id", transaction.MerchantID, "error", err)
 		}
 	}
 
-	slog.Info("transaction %s received — external_id: %s amount: %s %s",
-		transaction.ProviderTxID, transaction.ExternalID, transaction.Amount, transaction.Currency)
+	slog.Info("transaction received",
+		"tx_id", transaction.ProviderTxID,
+		"external_id", transaction.ExternalID,
+		"amount", transaction.Amount,
+		"currency", transaction.Currency,
+	)
 
 	c.Status(http.StatusOK)
 }

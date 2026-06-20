@@ -12,11 +12,11 @@ import (
 func FromWebhook(p momodto.WebhookPayload, rawBody []byte) (*storage.Transaction, error) {
 
 	if p.TransactionID == "" {
-		return nil, fmt.Errorf("missing transsactionId")
+		return nil, fmt.Errorf("missing transactionId")
 	}
 
 	if p.ExternalId == "" {
-		return nil, fmt.Errorf("missing externalId - caanot match to an order")
+		return nil, fmt.Errorf("missing externalId - cannot match to an order")
 	}
 
 	if p.Amount == "" {

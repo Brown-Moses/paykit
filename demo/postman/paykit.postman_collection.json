@@ -30,14 +30,15 @@
           "",
           "// Auto-compute HMAC-SHA256 for any request with X-Signature header",
           "const secret = pm.collectionVariables.get('webhook_secret');",
-          "const body   = pm.request.body ? pm.request.body.raw : '';",
-          "",
-          "// Replace tx placeholders in body with actual run-specific IDs",
-          "// (Postman doesn't resolve variables inside body for signing)",
-          "let resolvedBody = body",
-          "  .replace(/{{tx_success}}/g, pm.collectionVariables.get('tx_success'))",
-          "  .replace(/{{tx_failed}}/g,  pm.collectionVariables.get('tx_failed'))",
-          "  .replace(/{{tx_run_id}}/g,  pm.collectionVariables.get('tx_run_id'));",
+"const body   = (pm.request.body && pm.request.body.raw) ? pm.request.body.raw : '';",
+"",
+"// Replace tx placeholders in body with actual run-specific IDs",
+"// (Postman doesn't resolve variables inside body for signing)",
+"const resolvedBody = body",
+"  ? body.replace(/{{tx_success}}/g, pm.collectionVariables.get('tx_success'))",
+"      .replace(/{{tx_failed}}/g,  pm.collectionVariables.get('tx_failed'))",
+"      .replace(/{{tx_run_id}}/g,  pm.collectionVariables.get('tx_run_id'))",
+"  : '';",
           "",
           "const hasSignatureHeader = pm.request.headers.find(",
           "  function(h) { return h.key === 'X-Signature'; }",
@@ -67,7 +68,7 @@
               "mode": "raw",
               "raw": "{\n  \"name\": \"Test Shop\",\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
             },
-            "url": "{{base_url}}/v1/merchants"
+            "url": "{{base_url}}/merchants"
           },
           "event": [
             {
@@ -114,7 +115,7 @@
               "mode": "raw",
               "raw": "{\n  \"webhook_url\": \"https://webhook.site/test\"\n}"
             },
-            "url": "{{base_url}}/v1/merchants"
+            "url": "{{base_url}}/merchants"
           },
           "event": [
             {
@@ -142,7 +143,7 @@
               "mode": "raw",
               "raw": "{\n  \"name\": \"No Webhook Shop\"\n}"
             },
-            "url": "{{base_url}}/v1/merchants"
+            "url": "{{base_url}}/merchants"
           },
           "event": [
             {
@@ -178,7 +179,7 @@
               "mode": "raw",
               "raw": "{\n  \"transactionId\": \"{{tx_success}}\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -232,7 +233,7 @@
               "mode": "raw",
               "raw": "{\n  \"transactionId\": \"{{tx_failed}}\",\n  \"externalId\": \"order_988\",\n  \"amount\": \"2000\",\n  \"currency\": \"RWF\",\n  \"status\": \"FAILED\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:00:00Z\"\n}"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -284,7 +285,7 @@
               "mode": "raw",
               "raw": "{\n  \"transactionId\": \"TX-NO-SIG\",\n  \"externalId\": \"order_000\",\n  \"amount\": \"500\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:05:00Z\"\n}"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -315,7 +316,7 @@
               "mode": "raw",
               "raw": "{\n  \"transactionId\": \"TX-BAD-SIG\",\n  \"externalId\": \"order_001\",\n  \"amount\": \"750\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T11:10:00Z\"\n}"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -346,7 +347,7 @@
               "mode": "raw",
               "raw": "{\n  \"transactionId\": \"{{tx_success}}\",\n  \"externalId\": \"order_987\",\n  \"amount\": \"1000\",\n  \"currency\": \"RWF\",\n  \"status\": \"SUCCESSFUL\",\n  \"payer\": {\n    \"partyIdType\": \"MSISDN\",\n    \"partyId\": \"2507XXXXXXX\"\n  },\n  \"timestamp\": \"2026-04-21T10:15:30Z\"\n}"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -398,7 +399,7 @@
               "mode": "raw",
               "raw": "{ \"transactionId\": 123, \"amount\": \"oops\" }"
             },
-            "url": "{{base_url}}/v1/webhook/momo/{{merchant_id}}"
+            "url": "{{base_url}}/webhook/momo/{{merchant_id}}"
           },
           "event": [
             {
@@ -438,10 +439,10 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": {
-              "raw": "{{base_url}}/v1/transactions/{{tx_success}}",
+"url": {
+              "raw": "{{base_url}}/transactions/{{tx_success}}",
               "host": ["{{base_url}}"],
-              "path": ["v1", "transactions", "{{tx_success}}"]
+              "path": ["transactions", "{{tx_success}}"]
             }
           },
           "event": [
@@ -489,10 +490,10 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": {
-              "raw": "{{base_url}}/v1/transactions/{{tx_failed}}",
+"url": {
+              "raw": "{{base_url}}/transactions/{{tx_failed}}",
               "host": ["{{base_url}}"],
-              "path": ["v1", "transactions", "{{tx_failed}}"]
+              "path": ["transactions", "{{tx_failed}}"]
             }
           },
           "event": [
@@ -521,7 +522,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions"
+            "url": "{{base_url}}/transactions"
           },
           "event": [
             {
@@ -563,7 +564,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions?status=SUCCESSFUL"
+            "url": "{{base_url}}/transactions?status=SUCCESSFUL"
           },
           "event": [
             {
@@ -589,7 +590,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions?external_id=order_987"
+            "url": "{{base_url}}/transactions?external_id=order_987"
           },
           "event": [
             {
@@ -613,7 +614,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions?page=1&limit=1"
+            "url": "{{base_url}}/transactions?page=1&limit=1"
           },
           "event": [
             {
@@ -643,7 +644,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{base_url}}/v1/transactions"
+            "url": "{{base_url}}/transactions"
           },
           "event": [
             {
@@ -663,7 +664,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions/TX-DOES-NOT-EXIST"
+            "url": "{{base_url}}/transactions/TX-DOES-NOT-EXIST"
           },
           "event": [
             {
@@ -683,15 +684,15 @@
     {
       "name": "4. Delivery Logs",
       "item": [
-        {
+{
           "name": "4.1 Delivery logs — SUCCESSFUL transaction",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
             "url": {
-              "raw": "{{base_url}}/v1/transactions/{{tx_success}}/deliveries",
+              "raw": "{{base_url}}/transactions/{{tx_success}}/deliveries",
               "host": ["{{base_url}}"],
-              "path": ["v1", "transactions", "{{tx_success}}", "deliveries"]
+              "path": ["transactions", "{{tx_success}}", "deliveries"]
             }
           },
           "event": [
@@ -734,15 +735,15 @@
             }
           ]
         },
-        {
+{
           "name": "4.2 Delivery logs — FAILED transaction has zero attempts",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
             "url": {
-              "raw": "{{base_url}}/v1/transactions/{{tx_failed}}/deliveries",
+              "raw": "{{base_url}}/transactions/{{tx_failed}}/deliveries",
               "host": ["{{base_url}}"],
-              "path": ["v1", "transactions", "{{tx_failed}}", "deliveries"]
+              "path": ["transactions", "{{tx_failed}}", "deliveries"]
             }
           },
           "event": [
@@ -767,7 +768,7 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{api_key}}" }],
-            "url": "{{base_url}}/v1/transactions/TX-DOES-NOT-EXIST/deliveries"
+            "url": "{{base_url}}/transactions/TX-DOES-NOT-EXIST/deliveries"
           },
           "event": [
             {
@@ -782,15 +783,15 @@
             }
           ]
         },
-        {
+{
           "name": "4.4 Delivery logs — unauthorized",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/transactions/{{tx_success}}/deliveries",
+              "raw": "{{base_url}}/transactions/{{tx_success}}/deliveries",
               "host": ["{{base_url}}"],
-              "path": ["v1", "transactions", "{{tx_success}}", "deliveries"]
+              "path": ["transactions", "{{tx_success}}", "deliveries"]
             }
           },
           "event": [
@@ -871,24 +872,20 @@
                   "",
                   "const json = pm.response.json();",
                   "",
-                  "pm.test('webhooks_received is a number', function () {",
-                  "  pm.expect(json.webhooks_received).to.be.a('number');",
+"pm.test('transactions_total is a number', function () {",
+                  "  pm.expect(json.transactions_total).to.be.a('number');",
                   "});",
                   "",
-                  "pm.test('webhooks_successful is a number', function () {",
-                  "  pm.expect(json.webhooks_successful).to.be.a('number');",
+                  "pm.test('transactions_successful is a number', function () {",
+                  "  pm.expect(json.transactions_successful).to.be.a('number');",
                   "});",
                   "",
-                  "pm.test('webhooks_failed is a number', function () {",
-                  "  pm.expect(json.webhooks_failed).to.be.a('number');",
+                  "pm.test('transactions_failed is a number', function () {",
+                  "  pm.expect(json.transactions_failed).to.be.a('number');",
                   "});",
                   "",
-                  "pm.test('delivery_success_rate present', function () {",
+"pm.test('delivery_success_rate present', function () {",
                   "  pm.expect(json.delivery_success_rate).to.exist;",
-                  "});",
-                  "",
-                  "pm.test('merchants_total is a number', function () {",
-                  "  pm.expect(json.merchants_total).to.be.a('number');",
                   "});",
                   "",
                   "pm.test('uptime present', function () {",

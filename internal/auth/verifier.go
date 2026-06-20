@@ -9,7 +9,7 @@ import (
 
 var (
 	ErrMissingSignature    = errors.New("x-signature header is missing")
-	ErrInvalidSignature    = errors.New("signature does not match - possible forged rquest")
+	ErrInvalidSignature    = errors.New("signature does not match - possible forged request")
 	ErrReplay              = errors.New("transaction ID already processed - possible replay attack")
 	ErrMissingProviderTxID = errors.New("providerTxID is empty — cannot check replay")
 	ErrReplayFailure       = errors.New("replay check failed")
