@@ -63,6 +63,30 @@ type DeliveryLog struct {
 	DeliveredAt   time.Time
 }
 
+type DeliveryDLQStatus string
+
+const (
+	DLQStatusPending  DeliveryDLQStatus = "PENDING"
+	DLQStatusRequeued DeliveryDLQStatus = "REQUEUED"
+	DLQStatusResolved DeliveryDLQStatus = "RESOLVED"
+	DLQStatusFailed   DeliveryDLQStatus = "FAILED"
+)
+
+type DeliveryDLQ struct {
+	ID               int64
+	TransactionID    int64
+	MerchantID       int64
+	WebhookURL       string
+	AttemptCount     int
+	LastError        string
+	LastResponseCode int
+	Status           DeliveryDLQStatus
+	AvailableAt      time.Time
+	CreatedAt        time.Time
+	ResolvedAt       time.Time
+	// When re-queued successfully, we keep record and update status to RESOLVED for audit.
+}
+
 type Metrics struct {
 	TransactionsTotal      int
 	TransactionsSuccessful int

@@ -68,9 +68,15 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		return
 	}
 
-	// 3. Verify — HMAC + replay check
+	// 3. Verify — timestamp, then HMAC + replay check
+	if err := h.verifier.CheckTimestamp(raw.Timestamp); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or stale timestamp"})
+		return
+	}
+
 	signature := c.GetHeader("X-Signature")
 	if err := h.verifier.Verify(body, signature, raw.TransactionID); err != nil {
+
 		switch {
 		case errors.Is(err, auth.ErrMissingSignature):
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing signature header"})
@@ -281,7 +287,9 @@ func (h *Handler) Health(c *gin.Context) {
 // @Failure      500  {object}  object{error=string}
 // @Router       /metrics [get]
 func (h *Handler) Metrics(c *gin.Context) {
-	metrics, err := h.store.GetMetrics()
+	merchant := auth.MerchantFrom(c)
+	metrics, err := h.store.GetMetrics(merchant.ID)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not fetch metrics"})
 		return
@@ -292,7 +300,8 @@ func (h *Handler) Metrics(c *gin.Context) {
 		"transactions_successful": metrics.TransactionsSuccessful,
 		"transactions_failed":     metrics.TransactionsFailed,
 		"delivery_success_rate":   metrics.DeliverySuccessRate,
-		"uptime":                  time.Since(h.startTime).Round(time.Second).String(),
+
+		"uptime": time.Since(h.startTime).Round(time.Second).String(),
 	})
 }
 

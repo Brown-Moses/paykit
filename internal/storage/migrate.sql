@@ -62,3 +62,47 @@ CREATE TABLE IF NOT EXISTS delivery_logs (
 
 CREATE INDEX IF NOT EXISTS idx_delivery_logs_transaction_id ON delivery_logs(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_delivery_logs_merchant_id ON delivery_logs(merchant_id);
+
+-- Note: delivery_dlq schema below
+
+
+-- DLQ table for permanently failed merchant webhook deliveries
+-- Note: we keep resolved records for audit trail (do NOT delete)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'dlq_status') THEN
+        CREATE TYPE dlq_status AS ENUM ('PENDING', 'REQUEUED', 'RESOLVED', 'FAILED');
+    ELSE
+        -- Add REQUEUED for existing installs (idempotent)
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_enum
+            WHERE enumlabel = 'REQUEUED'
+              AND enumtypid = 'dlq_status'::regtype
+        ) THEN
+            ALTER TYPE dlq_status ADD VALUE 'REQUEUED';
+        END IF;
+    END IF;
+END $$;
+
+
+
+CREATE TABLE IF NOT EXISTS delivery_dlq (
+    id                  BIGSERIAL PRIMARY KEY,
+    transaction_id      BIGINT      NOT NULL REFERENCES transactions(id),
+    merchant_id         BIGINT      NOT NULL REFERENCES merchants(id),
+    webhook_url         TEXT        NOT NULL,
+    attempt_count       INT         NOT NULL,
+    last_error          TEXT,
+    last_response_code  INT,
+    status              dlq_status NOT NULL DEFAULT 'PENDING',
+    available_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at         TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_dlq_transaction_id ON delivery_dlq(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_dlq_merchant_id ON delivery_dlq(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_delivery_dlq_status ON delivery_dlq(status);
+CREATE INDEX IF NOT EXISTS idx_delivery_dlq_available_at ON delivery_dlq(available_at);
+

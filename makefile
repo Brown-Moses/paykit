@@ -12,7 +12,9 @@ ps:
 
 # ── Database ──────────────────────────────────────────────────────────────────────
 migrate:
-	docker exec -i paykit_postgres psql -U paykit -d paykit < internal/storage/migrate.sql
+	@# Run migration in a safe/idempotent way (multiple runs should not error)
+	docker exec -i paykit_postgres psql -U paykit -d paykit -v ON_ERROR_STOP=1 < internal/storage/migrate.sql
+
 
 ping-db:
 	docker exec paykit_postgres pg_isready -U paykit

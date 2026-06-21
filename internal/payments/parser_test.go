@@ -86,18 +86,13 @@ func TestFromWebhook(t *testing.T) {
 		}
 	})
 
-	t.Run("Invalid Timestamp Fallback", func(t *testing.T) {
+	t.Run("Invalid Timestamp Returns Error", func(t *testing.T) {
 		p := validPayload
 		p.Timestamp = "invalid-date"
-		before := time.Now().UTC()
-		tx, err := FromWebhook(p, rawBody)
-		after := time.Now().UTC()
-
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tx.ReceivedAt.Before(before) || tx.ReceivedAt.After(after) {
-			t.Errorf("expected fallback timestamp to be roughly now (%v to %v), got %v", before, after, tx.ReceivedAt)
+		_, err := FromWebhook(p, rawBody)
+		if err == nil {
+			t.Error("expected error for invalid timestamp, got nil")
 		}
 	})
+
 }

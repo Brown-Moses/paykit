@@ -196,8 +196,9 @@ To deploy this online for free or cheap:
 - [x] **Fix Webhook Flow:** `:merchant_id` is extracted in `handler.go` and persisted for merchant-scoped notifications.
 - [x] **Fix Retry Logic:** Final retry is correctly marked as `FAILED`.
 
-- [ ] **Make Migrations Idempotent:** Refactor SQL file to run safely multiple times.
-- [ ] **Upgrade Docker Build Image:** Match Go runtime in Dockerfile (`1.25`).
+- [ ] **Make File Migrations Idempotent:** Refactor SQL file to run safely multiple times.
+- [x] **Upgrade Docker Build Image:** Match Go runtime in Dockerfile (`1.25`).
 - [ ] **Add Essential Tests:** Validate signature verification to prevent spoofing.
-- [ ] **Secure API Keys:** Hash keys in DB instead of plaintext storage.
+- [x] **Secure API Keys:** Hash keys in DB instead of plaintext storage.
+
 - [ ] **Deploy Database & App:** Hook up a hosted Postgres (e.g. Neon) and deploy Go code to Railway/Render.

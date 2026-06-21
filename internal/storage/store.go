@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -225,7 +226,188 @@ func (s *Store) GetDeliveryLogs(transactionID int64) ([]DeliveryLog, error) {
 	return logs, nil
 }
 
-func (s *Store) GetMetrics() (*Metrics, error) {
+func (s *Store) EnqueueDLQ(dlq DeliveryDLQ) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`INSERT INTO delivery_dlq (transaction_id, merchant_id, webhook_url, attempt_count, last_error, last_response_code, status, available_at, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8, NOW())`,
+		dlq.TransactionID,
+		dlq.MerchantID,
+		dlq.WebhookURL,
+		dlq.AttemptCount,
+		dlq.LastError,
+		dlq.LastResponseCode,
+		dlq.Status,
+		dlq.AvailableAt,
+	)
+	return err
+}
+
+func (s *Store) ResolveDLQ(id int64, resolvedAt time.Time) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE delivery_dlq
+		 SET status = $1, resolved_at = $2
+		 WHERE id = $3`,
+		DLQStatusResolved,
+		resolvedAt,
+		id,
+	)
+	return err
+}
+
+// MarkDLQRequeued moves the DLQ item back into PENDING for retry
+// (used by admin retry endpoint to prevent concurrent duplicate retries)
+func (s *Store) MarkDLQRequeued(id int64) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE delivery_dlq
+		   SET status = $1,
+		       available_at = NOW(),
+		       resolved_at = NULL
+		 WHERE id = $2`,
+		DLQStatusRequeued,
+		id,
+	)
+	return err
+}
+
+// GetDueDLQ returns DLQ entries that are eligible for retry (available_at <= now)
+func (s *Store) GetDueDLQ(merchantID int64, limit int) ([]DeliveryDLQ, error) {
+	now := time.Now().UTC()
+	rows, err := s.db.Query(
+		context.Background(),
+		`SELECT id, transaction_id, merchant_id, webhook_url, attempt_count, last_error, last_response_code, status, available_at, created_at, resolved_at
+		 FROM delivery_dlq
+		 WHERE merchant_id = $1
+		   AND status IN ($2, $3)
+		   AND available_at <= $4
+		 ORDER BY available_at ASC, created_at DESC
+		 LIMIT $5`,
+		merchantID,
+		DLQStatusPending,
+		DLQStatusRequeued,
+		now,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []DeliveryDLQ
+	for rows.Next() {
+		var d DeliveryDLQ
+		if err := rows.Scan(
+			&d.ID,
+			&d.TransactionID,
+			&d.MerchantID,
+			&d.WebhookURL,
+			&d.AttemptCount,
+			&d.LastError,
+			&d.LastResponseCode,
+			&d.Status,
+			&d.AvailableAt,
+			&d.CreatedAt,
+			&d.ResolvedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func (s *Store) ListDLQ(merchantID int64, limit, offset int) ([]DeliveryDLQ, error) {
+	rows, err := s.db.Query(
+		context.Background(),
+		`SELECT id, transaction_id, merchant_id, webhook_url, attempt_count, last_error, last_response_code, status, available_at, created_at, resolved_at
+		 FROM delivery_dlq
+		 WHERE merchant_id = $1
+		 ORDER BY created_at DESC
+		 LIMIT $2 OFFSET $3`,
+		merchantID,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []DeliveryDLQ
+	for rows.Next() {
+		var d DeliveryDLQ
+		if err := rows.Scan(
+			&d.ID,
+			&d.TransactionID,
+			&d.MerchantID,
+			&d.WebhookURL,
+			&d.AttemptCount,
+			&d.LastError,
+			&d.LastResponseCode,
+			&d.Status,
+			&d.AvailableAt,
+			&d.CreatedAt,
+			&d.ResolvedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, nil
+}
+
+func (s *Store) GetDLQ(id int64, merchantID int64) (*DeliveryDLQ, error) {
+	d := &DeliveryDLQ{}
+	err := s.db.QueryRow(
+		context.Background(),
+		`SELECT id, transaction_id, merchant_id, webhook_url, attempt_count, last_error, last_response_code, status, available_at, created_at, resolved_at
+		 FROM delivery_dlq
+		 WHERE id = $1 AND merchant_id = $2`,
+		id,
+		merchantID,
+	).Scan(
+		&d.ID,
+		&d.TransactionID,
+		&d.MerchantID,
+		&d.WebhookURL,
+		&d.AttemptCount,
+		&d.LastError,
+		&d.LastResponseCode,
+		&d.Status,
+		&d.AvailableAt,
+		&d.CreatedAt,
+		&d.ResolvedAt,
+	)
+	return d, err
+}
+
+func (s *Store) GetTransactionInternal(transactionID int64) (*Transaction, error) {
+	tx := &Transaction{}
+	err := s.db.QueryRow(
+		context.Background(),
+		`SELECT id, merchant_id, provider_tx_id, external_id, amount, currency, status, payer_msisdn, raw_payload, received_at, created_at
+		 FROM transactions
+		 WHERE id = $1`,
+		transactionID,
+	).Scan(
+		&tx.ID,
+		&tx.MerchantID,
+		&tx.ProviderTxID,
+		&tx.ExternalID,
+		&tx.Amount,
+		&tx.Currency,
+		&tx.Status,
+		&tx.PayerMSISDN,
+		&tx.RawPayload,
+		&tx.ReceivedAt,
+		&tx.CreatedAt,
+	)
+	return tx, err
+}
+
+func (s *Store) GetMetrics(merchantID int64) (*Metrics, error) {
 	metrics := &Metrics{}
 
 	err := s.db.QueryRow(context.Background(),
@@ -233,7 +415,9 @@ func (s *Store) GetMetrics() (*Metrics, error) {
             COUNT(*)                                          AS total,
             COUNT(*) FILTER (WHERE status = 'SUCCESSFUL')    AS successful,
             COUNT(*) FILTER (WHERE status = 'FAILED')        AS failed
-         FROM transactions`,
+         FROM transactions
+         WHERE merchant_id = $1`,
+		merchantID,
 	).Scan(
 		&metrics.TransactionsTotal,
 		&metrics.TransactionsSuccessful,

@@ -307,11 +307,67 @@ When issues occur:
 
 ---
 
-## Next Steps
+## Next Steps (Follow Procedures One-by-One)
 
-1. **Review the PROJECT_OVERVIEW.md** - Understand technical architecture
-2. **Check the README.md** - See deployment instructions
-3. **Run the Postman collection** - Test the API endpoints
-4. **Set up MTN MoMo sandbox** - Test with sample transactions
-5. **Deploy to production** - Start processing real payments
-6. **Monitor and scale** - Handle growing transaction volumes
+Use this sequence exactly to move from prototype → production → revenue:
+
+### Step 1 — Review docs (foundation)
+1. Review **PROJECT_OVERVIEW.md** - understand architecture
+2. Review **USAGE_GUIDE.md** - understand operating procedures
+3. Review **shipping_readiness_analysis.md** - identify what is missing/broken
+
+### Step 2 — Verify locally (confidence)
+1. Start PayKit: `make up` then `make migrate` then `make run`
+2. Confirm endpoints work:
+   - `GET /health`
+   - `GET /docs/index.html`
+   - `GET /metrics` (if enabled)
+3. Run Postman collection(s) from `demo/postman/`
+
+### Step 3 — Fix critical blockers before selling (ship readiness)
+1. Resolve anything marked **[ ]** in `shipping_readiness_analysis.md`
+2. Re-run Postman tests + verify webhook → transaction → delivery_logs flow
+
+### Step 4 — Make it “sellable” to B2B (monetizable upgrades)
+Add these enterprise-grade capabilities (these are what allow you to charge):
+
+1. **Outgoing delivery webhook signatures (PayKit → Merchant)**
+   - Add signing for merchant delivery payloads.
+   - Provide merchant-side verification instructions.
+   - Pricing justification: protects merchants from spoofed notifications.
+
+2. **Operational observability package**
+   - Keep/extend metrics so you can answer: volume, success rate, last failures.
+   - Pricing justification: CTOs want evidence of reliability.
+
+3. **End-to-end delivery testing workflow**
+   - Provide a documented “simulate payment → verify delivery success” procedure.
+   - Pricing justification: reduces integration risk/time-to-go-live.
+
+### Step 5 — Turn it into an offer (case study first)
+1. Choose 1–2 target businesses for a free/discounted pilot
+2. Produce proof assets:
+   - delivery success rate
+   - retry behavior on failures
+   - idempotency behavior for duplicates
+3. Package those results into a simple one-page integration report
+
+### Step 6 — Revenue roadmap (financial stability)
+Follow this order:
+
+1. **Integration fee (Months 1–3)**
+   - Custom Integration: **$300–$700 one-time**
+   - Deliver: secure integration + deployment + verified production-like delivery logs
+
+2. **Monthly maintenance retainer (Months 1–12)**
+   - System Maintenance: **$50–$150/month** per merchant
+   - Deliver: health checks, log rotation, retry tuning, MTN payload updates
+
+3. **White-label / license (after 3–5 successful integrations)**
+   - Annual infrastructure license for agencies: **$1,000+/year**
+   - Deliver: reusable packaged PayKit instance + onboarding guide
+
+### Step 7 — Deploy, monitor, and scale
+1. Deploy with hosted Postgres + production configuration
+2. Monitor `/health` + `/metrics` continuously
+3. Scale horizontally only after stability is proven

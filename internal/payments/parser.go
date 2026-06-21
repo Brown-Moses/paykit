@@ -25,8 +25,9 @@ func FromWebhook(p momodto.WebhookPayload, rawBody []byte) (*storage.Transaction
 
 	timeStamp, err := time.Parse(time.RFC3339, p.Timestamp)
 	if err != nil {
-		timeStamp = time.Now().UTC() //fallback
+		return nil, fmt.Errorf("invalid timestamp: must be RFC3339")
 	}
+
 
 	return &storage.Transaction{
 		ProviderTxID: p.TransactionID,
