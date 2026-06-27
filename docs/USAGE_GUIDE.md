@@ -2,7 +2,7 @@
 
 ## Overview
 
-PayKit is a production-ready, multi-tenant payment notification engine that bridges MTN MoMo payments to your business systems. This guide covers everything you need to know to operate PayKit and integrate it with your applications.
+PayKit is a production-ready, multi-tenant payment notification engine that bridges MTN MoMo payments to your business systems. This guide covers everything you need to know to operate PayKit, integrate it with your applications, and run live production tests.
 
 ---
 
@@ -20,7 +20,7 @@ PayKit is a production-ready, multi-tenant payment notification engine that brid
 2. [MTN MoMo Setup](#mtn-momo-setup)
 3. [Webhook Integration](#webhook-integration)
 4. [API Usage](#api-usage)
-5. [Testing](#testing)
+5. [Live Production Testing](#live-production-testing)
 6. [Go-Live Checklist](#go-live-checklist)
 
 ---
@@ -52,6 +52,39 @@ make run
 
 Visit `http://localhost:8080/health` to verify it's working.
 
+---
+
+### Configuration
+
+#### Required Environment Variables
+
+```bash
+# Database connection (required)
+DATABASE_URL=postgres://paykit:paykit_secret@host:5432/paykit?sslmode=require
+
+# MTN MoMo webhook secret (required)
+# WARNING: Only define this ONCE in your .env file.
+# godotenv loads the last value if duplicated — causes silent signature mismatches.
+MOMO_WEBHOOK_SECRET=your_shared_secret_from_mtn_portal
+
+# Server port (optional, defaults to 8080)
+PORT=8080
+```
+
+#### Optional Security
+
+```bash
+# IP whitelisting for webhooks (recommended for production)
+ALLOWED_IPS=196.47.12.0/24,196.47.13.0/24
+
+# Timestamp validation window in seconds (default: 300 = ±5 minutes)
+WEBHOOK_MAX_CLOCK_SKEW_SECONDS=300
+```
+
+> **Critical:** Never define `MOMO_WEBHOOK_SECRET` twice in `.env`. Duplicate entries cause silent signature failures during webhook validation.
+
+---
+
 ### Production Deployment
 
 #### Docker Deployment
@@ -81,70 +114,69 @@ DATABASE_URL="postgres://..." MOMO_WEBHOOK_SECRET="..." ./paykit
 - **Storage**: 10GB+ for logs and database
 - **Network**: Stable internet for webhook delivery
 
-### Configuration
-
-#### Required Environment Variables
-
-```bash
-# Database connection (required)
-DATABASE_URL=postgres://paykit:paykit_secret@host:5432/paykit?sslmode=require
-
-# MTN MoMo webhook secret (required)
-MOMO_WEBHOOK_SECRET=your_shared_secret_from_mtn_portal
-
-# Server port (optional, defaults to 8080)
-PORT=8080
-```
-
-#### Optional Security
-
-```bash
-# IP whitelisting for webhooks (recommended for production)
-ALLOWED_IPS=196.47.12.0/24,196.47.13.0/24
-```
-
-#### Database Setup
-
-PayKit uses PostgreSQL 15+. Create database and user:
-
-```sql
-CREATE DATABASE paykit;
-CREATE USER paykit WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE paykit TO paykit;
-```
-
-Run migrations:
-```bash
-make migrate
-```
+---
 
 ### Monitoring & Maintenance
 
 #### Health Checks
 
 ```bash
-# Check service health
 curl http://your-paykit.com/health
-
-# Check database connectivity
-make ping-db
 ```
 
-#### Key Metrics to Monitor
+#### Prometheus Metrics
 
-- **Webhook Processing Rate**: Transactions per minute
-- **Delivery Success Rate**: Percentage of successful merchant notifications
-- **Response Times**: P95 webhook processing time
-- **Error Rates**: Failed webhook validations
+PayKit exposes Prometheus-compatible metrics at `/metrics/prometheus`:
+
+```bash
+curl http://localhost:8080/metrics/prometheus | grep paykit
+```
+
+Key metrics exposed:
+
+| Metric | Description |
+|--------|-------------|
+| `paykit_merchant_webhook_deliveries_total` | Delivery attempts by merchant and status |
+| `paykit_delivery_dlq_enqueues_total` | Webhooks pushed to DLQ after max retries |
+| `paykit_delivery_dlq_retries_total` | Manual DLQ retry attempts |
+| `paykit_delivery_dlq_items_resolved_total` | Successfully resolved DLQ items |
+
+#### Connecting Prometheus + Grafana
+
+Add to your `docker-compose.yml`:
+
+```yaml
+prometheus:
+  image: prom/prometheus:latest
+  ports:
+    - "9090:9090"
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+grafana:
+  image: grafana/grafana:latest
+  ports:
+    - "3000:3000"
+```
+
+Create `prometheus.yml` in your project root:
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "paykit"
+    static_configs:
+      - targets: ["paykit:8080"]
+    metrics_path: "/metrics/prometheus"
+```
 
 #### Database Maintenance
 
 ```bash
 # Backup database
 make db-backup
-
-# Restore from backup
-make db-restore FILE=backups/paykit_20240101.sql
 
 # Monitor table sizes
 SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
@@ -154,8 +186,6 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 ```
 
 #### Log Analysis
-
-PayKit logs all webhook deliveries. Check delivery success:
 
 ```sql
 SELECT
@@ -167,29 +197,32 @@ WHERE delivered_at >= NOW() - INTERVAL '24 hours'
 GROUP BY status;
 ```
 
+---
+
 ### Troubleshooting
 
 #### Common Issues
 
-**Webhooks not being received:**
-- Check MTN MoMo configuration points to correct URL
-- Verify `MOMO_WEBHOOK_SECRET` matches MTN portal
-- Check firewall allows incoming connections
+**`invalid signature` on webhook:**
+- Check `MOMO_WEBHOOK_SECRET` is defined only once in `.env`
+- Verify the secret used to sign matches the one the server loaded
+- Ensure you are signing the raw body bytes, not a re-serialized version
+
+**`invalid or stale timestamp` on webhook:**
+- Timestamp must be within ±5 minutes of server time (configurable via `WEBHOOK_MAX_CLOCK_SKEW_SECONDS`)
+- Always generate timestamp dynamically — never hardcode it in test scripts
+- Timestamp must be RFC3339 format: `2026-06-27T10:00:00Z`
+
+**`verification failed` (500) on webhook:**
+- This is the default error for unhandled verifier errors
+- Most common cause: `transactionId` field missing or empty in payload
+- PayKit uses `transactionId` (not `financialTransactionId`) for replay detection
+- Check your JSON field names match the DTO exactly
 
 **Merchant notifications failing:**
-- Verify merchant `webhook_url` is accessible
-- Check for network timeouts (PayKit retries automatically)
-- Review delivery_logs for specific error messages
-
-**Database connection issues:**
-- Verify `DATABASE_URL` is correct
-- Check PostgreSQL is running
-- Ensure SSL settings match database configuration
-
-**High memory usage:**
-- Monitor goroutine count (PayKit uses goroutines for async notifications)
-- Check for memory leaks in custom code
-- Consider increasing server resources
+- Verify merchant `webhook_url` is publicly accessible
+- Check delivery_logs for specific error messages
+- Use DLQ admin endpoints to retry failed deliveries
 
 #### Debug Commands
 
@@ -208,9 +241,11 @@ WHERE dl.status = 'FAILED'
 ORDER BY dl.delivered_at DESC
 LIMIT 10;
 
-# Check merchant registration
-SELECT id, name, webhook_url, active
-FROM merchants;
+# Check DLQ
+SELECT id, transaction_id, merchant_id, attempt_count, last_error, status
+FROM delivery_dlq
+ORDER BY created_at DESC
+LIMIT 10;
 ```
 
 ---
@@ -218,8 +253,6 @@ FROM merchants;
 ## For Merchants (Customers)
 
 ### Merchant Registration
-
-Register your business with PayKit:
 
 ```bash
 curl -X POST http://your-paykit.com/merchants \
@@ -233,224 +266,302 @@ curl -X POST http://your-paykit.com/merchants \
 **Response:**
 ```json
 {
-  "merchant_id": 123,
+  "id": 2,
+  "name": "Your Business Name",
   "api_key": "pk_live_abc123def456",
-  "webhook_url": "https://your-app.com/webhooks/paykit"
+  "webhook_url": "https://your-app.com/webhooks/paykit",
+  "message": "store this api_key safely — it will not be shown again"
 }
 ```
 
-**Important:** Save your `api_key` securely - it's required for all API calls.
+> **Important:** Save your `api_key` immediately. It is shown only once and cannot be retrieved.
+
+---
 
 ### MTN MoMo Setup
 
-1. **Get MTN MoMo Credentials:**
-   - Sign up at MTN Developer Portal
-   - Get your `webhook_secret` (shared with PayKit)
-   - Note your subscriber ID and API key
+1. Sign up at the MTN Developer Portal
+2. Get your `webhook_secret` — this must match `MOMO_WEBHOOK_SECRET` in PayKit
+3. Set your webhook URL in the MTN portal:
+   ```
+   https://your-paykit.com/webhook/momo/{your_merchant_id}
+   ```
+4. Test in MTN sandbox before going live
 
-2. **Configure Webhook URL:**
-   - In MTN portal, set webhook URL to:
-     ```
-     https://your-paykit.com/webhook/momo/123
-     ```
-     (Replace 123 with your merchant_id)
-
-3. **Test in Sandbox:**
-   - Use MTN sandbox environment first
-   - Test with small amounts
-   - Verify webhook delivery
+---
 
 ### Webhook Integration
 
-PayKit sends notifications to your `webhook_url` when payments are received.
+PayKit sends a notification to your `webhook_url` after every successful payment.
 
 #### Notification Payload
 
 ```json
 {
   "event_type": "payment.successful",
-  "merchant_id": 123,
+  "merchant_id": 2,
   "transaction": {
     "provider_tx_id": "TX-123456789",
     "external_id": "ORDER-ABC-123",
     "amount": 5000.00,
     "currency": "RWF",
     "status": "SUCCESSFUL",
-    "received_at": "2024-01-15T10:30:00Z"
+    "received_at": "2026-06-27T10:30:00Z"
   }
 }
 ```
 
-#### Handle the notification:
+#### Example Handler (Node.js)
 
 ```javascript
-// Example Node.js handler
 app.post('/webhooks/paykit', (req, res) => {
   const { event_type, transaction } = req.body;
-
   if (event_type === 'payment.successful') {
-    // Update your order status
     await updateOrder(transaction.external_id, 'paid');
-
-    // Fulfill the order
-    await fulfillOrder(transaction.external_id);
   }
-
   res.status(200).send('OK');
 });
 ```
 
+#### Example Handler (Python)
+
 ```python
-# Example Python handler
 @app.route('/webhooks/paykit', methods=['POST'])
 def paykit_webhook():
     data = request.get_json()
-
     if data['event_type'] == 'payment.successful':
-        # Update order status
         update_order(data['transaction']['external_id'], 'paid')
-
-        # Send confirmation email
-        send_payment_confirmation(data['transaction'])
-
     return 'OK', 200
 ```
 
-#### Security Best Practices
-
-- **Verify signatures** (if PayKit adds them in future)
-- **Use HTTPS** for your webhook endpoint
-- **Implement idempotency** using `provider_tx_id`
-- **Respond quickly** (within 5 seconds)
-- **Return 200 OK** for successful processing
+---
 
 ### API Usage
 
-Use your `api_key` for authenticated requests:
+All protected endpoints require your API key:
 
 ```bash
-# All API calls need this header
 Authorization: Bearer pk_live_abc123def456
 ```
 
 #### Query Transactions
 
 ```bash
-# Get all transactions
+# List all transactions
 curl -H "Authorization: Bearer pk_live_abc123def456" \
      http://your-paykit.com/transactions
 
 # Filter by status
 curl -H "Authorization: Bearer pk_live_abc123def456" \
      "http://your-paykit.com/transactions?status=SUCCESSFUL"
+```
 
-# Get specific transaction
+#### Check Delivery Logs
+
+```bash
 curl -H "Authorization: Bearer pk_live_abc123def456" \
-     http://your-paykit.com/transactions/TX-123456789
+     http://your-paykit.com/transactions/{id}/deliveries
 ```
 
-#### Check Delivery Status
+#### DLQ Admin
 
 ```bash
-# Get delivery attempts for a transaction
+# List failed deliveries
 curl -H "Authorization: Bearer pk_live_abc123def456" \
-     http://your-paykit.com/transactions/TX-123456789/deliveries
+     http://your-paykit.com/admin/dlq
+
+# Retry a specific failed delivery
+curl -X POST -H "Authorization: Bearer pk_live_abc123def456" \
+     http://your-paykit.com/admin/dlq/{id}/retry
 ```
-
-### Testing
-
-#### Using the Postman Collection
-
-1. Import `demo/postman/paykit.postman_collection.json`
-2. Set variables:
-   - `base_url`: `http://localhost:8080` (or your PayKit URL)
-   - `webhook_secret`: Your test secret
-   - `api_key`: Your merchant API key
-3. Run the collection in order
-
-#### Manual Testing
-
-```bash
-# 1. Register merchant
-curl -X POST http://localhost:8080/merchants \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Test Merchant", "webhook_url": "https://httpbin.org/post"}'
-
-# 2. Simulate MTN webhook (requires proper signature)
-# Use the Postman collection for proper signature calculation
-```
-
-#### Test Webhook Endpoint
-
-```bash
-# Test your webhook handler
-curl -X POST https://your-app.com/webhooks/paykit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "payment.successful",
-    "transaction": {
-      "provider_tx_id": "TEST-123",
-      "external_id": "ORDER-TEST-001",
-      "amount": 1000.00,
-      "currency": "RWF",
-      "status": "SUCCESSFUL"
-    }
-  }'
-```
-
-### Go-Live Checklist
-
-- [ ] Merchant account registered with PayKit
-- [ ] MTN MoMo sandbox testing completed
-- [ ] Webhook endpoint implemented and tested
-- [ ] Idempotency handling implemented
-- [ ] Error handling and logging in place
-- [ ] MTN MoMo production credentials obtained
-- [ ] PayKit production instance configured
-- [ ] Webhook URL updated to production
-- [ ] Small test transaction processed successfully
-- [ ] Monitoring and alerting set up
-- [ ] Support contact information documented
 
 ---
 
-## Support
+### Live Production Testing
 
-### For Operators
-- Check logs: `docker-compose logs paykit`
-- Database queries in `/internal/storage/migrate.sql`
-- API documentation at `/docs/index.html`
+Follow these steps in order. Each step must pass before moving to the next.
 
-### For Merchants
-- API documentation at `https://your-paykit.com/docs/index.html`
-- Check transaction status via API
-- Review delivery logs for webhook issues
+#### Prerequisites
 
-### Common Questions
+- PayKit running locally (`make run`)
+- Migrations applied (`make migrate`)
+- A request inspection tool — use [RequestBin](https://requestbin.com) or [webhook.site](https://webhook.site)
+- `.env` loaded correctly (verify no duplicate `MOMO_WEBHOOK_SECRET` entries)
 
-**Q: How do I handle duplicate webhooks?**
-A: PayKit prevents duplicates using `provider_tx_id`. Implement idempotency in your webhook handler.
+---
 
-**Q: What happens if my webhook endpoint is down?**
-A: PayKit retries up to 3 times with exponential backoff. Check delivery logs for status.
+#### Step 1 — Health Check
 
-**Q: Can I change my webhook URL?**
-A: Contact PayKit operator to update your merchant record.
+```bash
+curl http://localhost:8080/health
+```
 
-**Q: How do I test without real MTN payments?**
-A: Use the Postman collection with test signatures, or MTN sandbox environment.
+Expected: `{"status":"ok"}`
+
+---
+
+#### Step 2 — Create Test Merchant
+
+Replace the `webhook_url` with your RequestBin URL:
+
+```bash
+curl -X POST http://localhost:8080/merchants \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Shop",
+    "webhook_url": "https://your-requestbin-url.oast.pro"
+  }'
+```
+
+Save the `id` and `api_key` from the response.
+
+---
+
+#### Step 3 — Send a Valid Webhook
+
+> **Critical notes before running:**
+> - Use `transactionId` (not `financialTransactionId`) — PayKit's DTO field is `transactionId`
+> - Generate timestamp dynamically — hardcoded timestamps will fail the 5-minute window check
+> - Sign the exact raw body string — any difference between signed and sent body causes `invalid signature`
+
+```bash
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TXID="TX-$(date +%s)"
+BODY="{\"amount\":\"5000\",\"currency\":\"RWF\",\"externalId\":\"EXT-001\",\"transactionId\":\"$TXID\",\"status\":\"SUCCESSFUL\",\"timestamp\":\"$TS\"}"
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "your_webhook_secret" | awk '{print $2}')
+
+curl -X POST http://localhost:8080/webhook/momo/{merchant_id} \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIG" \
+  -d "$BODY"
+```
+
+Expected: `200 OK`  
+Check RequestBin — the notification payload should arrive within seconds.
+
+---
+
+#### Step 4 — Test Replay Protection
+
+Send the **exact same command** again immediately.
+
+Expected: `200 OK` but RequestBin receives **nothing** — duplicate silently ignored.
+
+This confirms `provider_tx_id` deduplication is working.
+
+---
+
+#### Step 5 — Test Timestamp Rejection
+
+Send a webhook with a stale timestamp (older than 5 minutes):
+
+```bash
+BODY="{\"amount\":\"5000\",\"currency\":\"RWF\",\"externalId\":\"EXT-002\",\"transactionId\":\"TX-stale\",\"status\":\"SUCCESSFUL\",\"timestamp\":\"2020-01-01T00:00:00Z\"}"
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "your_webhook_secret" | awk '{print $2}')
+
+curl -X POST http://localhost:8080/webhook/momo/{merchant_id} \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIG" \
+  -d "$BODY"
+```
+
+Expected: `401 {"error":"invalid or stale timestamp"}`
+
+---
+
+#### Step 6 — Verify Prometheus Counters
+
+```bash
+curl http://localhost:8080/metrics/prometheus | grep paykit
+```
+
+Expected output after at least one successful webhook:
+
+```
+paykit_merchant_webhook_deliveries_total{merchant_id="2",status="SUCCESS"} 1
+```
+
+---
+
+#### Step 7 — Force a DLQ Entry
+
+Set your merchant `webhook_url` to an invalid/unreachable URL, then send a valid webhook. After 3 retry attempts (exponential backoff), check the DLQ:
+
+```bash
+curl -H "Authorization: Bearer your_api_key" \
+     http://localhost:8080/admin/dlq
+```
+
+Expected: one record with `status: "FAILED"`
+
+Then retry it:
+
+```bash
+curl -X POST \
+     -H "Authorization: Bearer your_api_key" \
+     http://localhost:8080/admin/dlq/{id}/retry
+```
+
+---
+
+#### Step 8 — Check Transaction List
+
+```bash
+curl -H "Authorization: Bearer your_api_key" \
+     http://localhost:8080/transactions
+```
+
+Expected: list of processed transactions scoped to your merchant.
+
+---
+
+#### Common Test Errors & Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `invalid or stale timestamp` | Hardcoded timestamp in body | Use `date -u` to generate dynamically |
+| `invalid signature` | Wrong secret or body mismatch | Check `MOMO_WEBHOOK_SECRET` in `.env` — ensure no duplicates |
+| `verification failed` | `transactionId` field missing or empty | Use `transactionId` not `financialTransactionId` |
+| `missing signature header` | `X-Signature` header not sent | Add `-H "X-Signature: $SIG"` to curl |
+| RequestBin shows nothing on retry | Replay protection working correctly | Expected — use a new `TXID` for each test |
+
+---
+
+### Go-Live Checklist
+
+- [ ] Health endpoint returns `ok`
+- [ ] Merchant registered and `api_key` saved
+- [ ] Valid webhook accepted and delivered to RequestBin
+- [ ] Replay protection confirmed (duplicate rejected silently)
+- [ ] Stale timestamp rejected with 401
+- [ ] Prometheus counters show non-zero values
+- [ ] DLQ entry created after forced failure
+- [ ] DLQ retry endpoint works
+- [ ] Transaction list returns merchant-scoped data
+- [ ] `.env` has no duplicate `MOMO_WEBHOOK_SECRET`
+- [ ] MTN MoMo production credentials configured
+- [ ] Webhook URL updated to production domain
+- [ ] Monitoring (Prometheus + Grafana) connected
 
 ---
 
 ## Security Notes
 
 - Never share your `api_key` or `MOMO_WEBHOOK_SECRET`
-- Use HTTPS for all webhook endpoints
-- Implement proper input validation
-- Monitor for unusual activity
-- Keep PayKit updated with latest security patches
+- Use HTTPS for all webhook endpoints in production
+- Define `MOMO_WEBHOOK_SECRET` exactly once in `.env`
+- Always generate fresh timestamps — never hardcode them
+- Use `transactionId` as your idempotency key in your own systems
+- Monitor DLQ regularly — failed deliveries mean missed payment notifications
 
 ---
 
-*Last updated: April 2026*</content>
-<parameter name="filePath">/home/brown-moses/go/Go/paykitt/paykit/USAGE_GUIDE.md
+## Support
+
+- API docs: `http://localhost:8080/docs/index.html`
+- Logs: `docker-compose logs paykit`
+- Metrics: `http://localhost:8080/metrics/prometheus`
+
+---
+
+*Last updated: June 2026*

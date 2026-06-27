@@ -202,3 +202,30 @@ To deploy this online for free or cheap:
 - [x] **Secure API Keys:** Hash keys in DB instead of plaintext storage.
 
 - [ ] **Deploy Database & App:** Hook up a hosted Postgres (e.g. Neon) and deploy Go code to Railway/Render.
+
+
+curl -X POST http://localhost:8080/merchants \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Shop",
+    "webhook_url": "https://acf816828d22020689cegwxh1hhyyyyyb.oast.pro"
+  }'
+
+api_key:     pk_live_2350a794fbc9059929c1d94cf8b06fb2
+merchant_id: 2
+webhook_url: https://acf816828d22020689cegwxh1hhyyyyyb.oast.pro
+
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TXID="TX-$(date +%s)"
+BODY="{\"amount\":\"5000\",\"currency\":\"RWF\",\"externalId\":\"EXT-001\",\"transactionId\":\"$TXID\",\"status\":\"SUCCESSFUL\",\"timestamp\":\"$TS\"}"
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "test_secret" | awk '{print $2}')
+
+echo "TXID: $TXID"
+echo "SIG: $SIG"
+
+curl -X POST http://localhost:8080/webhook/momo/2 \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIG" \
+  -d "$BODY"
+TXID: TX-1782552939
+SIG: 45236ab58f6dccbef81c027a00dec0c5744ffa69c81d1e422c6860a54c3a3d58
