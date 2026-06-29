@@ -35,7 +35,6 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 	// Public
 	//  r.POST("/webhook/momo/:merchant_id", webHook.HandleMoMoWebhook)
 	r.POST("/merchants", webHook.CreateMerchant)
-	r.GET("/metrics", webHook.Metrics)
 
 	// Webhook — IP whitelisted, no API key needed
 	r.POST("/webhook/momo/:merchant_id",
@@ -50,6 +49,7 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 		protected.GET("/transactions", webHook.ListTransactions)
 		protected.GET("/transactions/:id", webHook.GetTransaction)
 		protected.GET("/transactions/:id/deliveries", webHook.GetDeliveryLogs)
+		protected.GET("/metrics", webHook.Metrics)
 
 		// Admin — DLQ
 		protected.GET("/admin/dlq", webHook.ListDLQ)

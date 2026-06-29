@@ -11,12 +11,13 @@ PayKit acts as a bridge between **MTN MoMo** (the payment provider) and **mercha
 ### Core Workflow
 
 1. **Receive** — MTN MoMo sends a payment webhook to `POST /webhook/momo/:merchant_id`.
-2. **Verify** — PayKit validates the webhook's `X-Signature` using HMAC-SHA256 and checks for replay attacks using the unique `provider_tx_id`.
+2. **Verify** — PayKit validates the webhook's timestamp skew and `X-Signature` using HMAC-SHA256, checking for replay attacks using the unique `provider_tx_id`.
 3. **Parse & Store** — The payload is parsed into a domain model, the payer's phone number (MSISDN) is SHA-256 hashed for privacy, and the transaction is persisted in PostgreSQL.
 4. **Notify** — If the transaction is successful, PayKit asynchronously forwards a lightweight notification to the merchant's configured `webhook_url`.
 5. **Retry** — Failed merchant deliveries are retried up to 3 times with exponential backoff.
-6. **Log** — Every delivery attempt is recorded in a `delivery_logs` table for full observability.
-7. **Query** — Merchants can query their own transactions and delivery logs via a Bearer-token-protected REST API.
+6. **Dead Letter Queue (DLQ)** — If all 3 notifications fail, the notification is moved to the DLQ (`delivery_dlq` table) for operator inspection and manual retry.
+7. **Log** — Every delivery attempt is recorded in a `delivery_logs` table for full observability.
+8. **Query & Admin** — Merchants can query their transactions, scoped metrics, delivery logs, and manage their DLQ entries via a Bearer-token-protected REST API.
 
 ---
 
@@ -28,6 +29,7 @@ PayKit acts as a bridge between **MTN MoMo** (the payment provider) and **mercha
 | **HTTP Framework** | [Gin](https://github.com/gin-gonic/gin) |
 | **Database** | PostgreSQL 15 |
 | **DB Driver** | [pgx/v5](https://github.com/jackc/pgx) (connection pooling via `pgxpool`) |
+| **Instrumentation** | Prometheus Go Client |
 | **API Documentation** | [Swagger (swaggo)](https://github.com/swaggo/swag) |
 | **Environment Config** | [godotenv](https://github.com/joho/godotenv) |
 | **Containerization** | Docker & Docker Compose |
@@ -45,17 +47,21 @@ paykit/
 │   ├── auth/
 │   │   ├── apikey.go           # API key generation (pk_live_...)
 │   │   ├── middleware.go       # Bearer token authentication middleware
-│   │   └── verifier.go         # HMAC-SHA256 signature & replay-attack verification
+│   │   └── verifier.go         # HMAC-SHA256 signature, timestamp, & replay-attack verification
+│   ├── metrics/
+│   │   ├── metrics.go          # Prometheus custom metrics registration & tracking
+│   │   └── http.go             # Prometheus scrape HTTP handler
 │   ├── payments/
-│   │   ├── notifier.go         # Async merchant notification with retry logic
+│   │   ├── notifier.go         # Async merchant notification with retry & DLQ logic
 │   │   └── parser.go           # Webhook payload parsing & MSISDN hashing
 │   ├── storage/
-│   │   ├── models.go           # Domain structs (Transaction, Merchant, DeliveryLog)
+│   │   ├── models.go           # Domain structs (Transaction, Merchant, DeliveryLog, DLQ)
 │   │   ├── store.go            # PostgreSQL queries & data access layer
 │   │   └── migrate.sql         # Database schema, enums, indexes
 │   └── webhook/
-│       ├── handler.go          # HTTP handlers (webhooks, transactions, health)
-│       └── merchant.go         # Merchant registration handler
+│       ├── handler.go          # HTTP handlers (webhooks, transactions, metrics, health)
+│       ├── merchant.go         # Merchant registration handler
+│       └── dlq_admin.go        # DLQ inspection and manual retry handlers
 ├── pkg/momodto/types.go        # MTN MoMo DTOs (WebhookPayload, NotifyPayload)
 ├── docs/                       # Auto-generated Swagger files
 ├── demo/postman/               # Postman collection for testing
@@ -70,19 +76,21 @@ paykit/
 
 ### Security
 - **HMAC-SHA256 Signature Verification** — Every incoming MoMo webhook is cryptographically verified using a shared secret (`MOMO_WEBHOOK_SECRET`). Comparisons are constant-time to prevent timing attacks.
-- **Replay Attack Protection** — Transactions are rejected if their `provider_tx_id` has already been processed.
-- **Bearer Token Authentication** — Merchant-facing endpoints require a `Bearer pk_live_...` API key.
+- **Replay Attack & Timestamp Protection** — Webhook requests are rejected if the timestamp is skew-stale (exceeding ±5 minutes) or if their `provider_tx_id` has already been processed.
+- **IP Whitelisting** — Configurable incoming IP restrictions (`ALLOWED_IPS`) for MoMo webhook endpoints to ensure only MTN networks can trigger them.
+- **Bearer Token Authentication** — Merchant-facing endpoints require a hashed `Bearer pk_live_...` API key.
 - **Privacy** — Payer MSISDNs (phone numbers) are hashed with SHA-256 before storage.
 
 ### Reliability
 - **Idempotency** — Duplicate webhooks are detected and silently acknowledged with `200 OK` so MTN does not retry unnecessarily.
 - **Async Notifications** — Merchant webhook calls are performed in goroutines so the main request path never blocks.
 - **Exponential Backoff Retries** — Failed merchant deliveries are retried 3 times (`1s`, `2s`, `4s` waits).
+- **Dead Letter Queue (DLQ)** — Failed deliveries are quarantined in a `delivery_dlq` table after exhausting retries. Merchants can trigger manual retries on DLQ items which auto-resolve on success.
 - **Delivery Observability** — Every attempt, response code, and error message is stored in `delivery_logs`.
 - **Graceful Shutdown** — The HTTP server drains in-flight requests for up to 10 seconds on `SIGINT` / `SIGTERM`.
 
 ### Multi-Tenancy
-- Merchants are first-class tenants. All transactions and delivery logs are scoped by `merchant_id`.
+- Merchants are first-class tenants. All transactions, metrics, and DLQ logs are scoped by `merchant_id`.
 - Each merchant receives a unique, cryptographically random API key upon registration.
 
 ---
@@ -94,8 +102,9 @@ paykit/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health & database connectivity check |
-| `POST` | `/webhook/momo/:merchant_id` | Receive MTN MoMo payment webhook |
+| `POST` | `/webhook/momo/:merchant_id` | Receive MTN MoMo payment webhook (IP Whitelisted) |
 | `POST` | `/merchants` | Register a new merchant (returns API key) |
+| `GET` | `/metrics/prometheus` | Prometheus metrics scrape endpoint |
 
 ### Protected (Bearer Auth)
 
@@ -104,6 +113,9 @@ paykit/
 | `GET` | `/transactions` | List/filter paginated transactions |
 | `GET` | `/transactions/:id` | Get a single transaction by provider TX ID |
 | `GET` | `/transactions/:id/deliveries` | Get webhook delivery attempts for a transaction |
+| `GET` | `/metrics` | Get transaction & delivery metrics (scoped to merchant) |
+| `GET` | `/admin/dlq` | List delivery DLQ entries for the merchant |
+| `POST` | `/admin/dlq/:id/retry` | Trigger an immediate manual retry for a DLQ entry |
 
 ### Documentation
 
@@ -158,6 +170,23 @@ Stores every attempt to notify a merchant.
 | `response_code` | `INT` | HTTP status returned by merchant |
 | `error_message` | `TEXT` | Network or HTTP error details |
 | `delivered_at` | `TIMESTAMPTZ` | Attempt timestamp |
+
+### `delivery_dlq`
+Stores permanently failed merchant webhook notifications that require manual intervention.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | `BIGSERIAL PK` | Internal ID |
+| `transaction_id` | `BIGINT FK → transactions` | Related transaction |
+| `merchant_id` | `BIGINT FK → merchants` | Related merchant |
+| `webhook_url` | `TEXT` | Target webhook URL |
+| `attempt_count` | `INT` | Total delivery attempts tried |
+| `last_error` | `TEXT` | Final attempt error message |
+| `last_response_code`| `INT` | Final attempt HTTP response code |
+| `status` | `dlq_status ENUM` | `PENDING`, `REQUEUED`, `RESOLVED`, `FAILED` |
+| `available_at` | `TIMESTAMPTZ` | When item is eligible for retry |
+| `created_at` | `TIMESTAMPTZ` | Quarantine timestamp |
+| `resolved_at` | `TIMESTAMPTZ` | Resolve/manual delivery success timestamp |
 
 ---
 

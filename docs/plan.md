@@ -321,7 +321,8 @@ Use this sequence exactly to move from prototype → production → revenue:
 2. Confirm endpoints work:
    - `GET /health`
    - `GET /docs/index.html`
-   - `GET /metrics` (if enabled)
+   - `GET /metrics` (authenticated)
+   - `GET /metrics/prometheus` (system metrics)
 3. Run Postman collection(s) from `demo/postman/`
 
 ### Step 3 — Fix critical blockers before selling (ship readiness)

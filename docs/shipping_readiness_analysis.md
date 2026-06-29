@@ -117,36 +117,19 @@ When launching a payment application, basic security measures are non-negotiable
 
 ## ⚙️ 3. Operational & Deployment Readiness
 
-### 🔄 Non-Idempotent Migrations
-* **The Problem:** Running `make migrate` is currently implemented as:
-  `psql ... < internal/storage/migrate.sql`
-  If you run this twice, Postgres will crash because `CREATE TYPE tx_status` and `ALTER TABLE transactions ADD COLUMN merchant_id` will fail.
-* **The Solution:** Refactor [migrate.sql](file:///home/brown-moses/go/Go/paykitt/paykit/internal/storage/migrate.sql) to be safe to run repeatedly:
-  ```sql
-  -- Safe Enum type creation
-  DO $$ 
-  BEGIN 
-      IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tx_status') THEN
-          CREATE TYPE tx_status AS ENUM ('PENDING', 'SUCCESSFUL', 'FAILED');
-      END IF;
-  END $$;
+### ✅ Non-Idempotent Migrations (Resolved)
+* **The Solution:** [migrate.sql](file:///home/brown-moses/go/Go/paykitt/paykit/internal/storage/migrate.sql) has been refactored to use safe `IF NOT EXISTS` constructs, conditional type/enum checks in `DO` blocks, and `ADD COLUMN IF NOT EXISTS`. The `makefile` was also updated to execute with the `-v ON_ERROR_STOP=1` flag to guarantee migration safety and idempotence.
 
-  -- Use IF NOT EXISTS for tables
-  CREATE TABLE IF NOT EXISTS transactions (...);
+### ✅ Dockerfile / Go Version Mismatches (Resolved)
+* **The Solution:** The base image in [Dockerfile](file:///home/brown-moses/go/Go/paykitt/paykit/Dockerfile) has been upgraded from `golang:1.22-alpine` to `golang:1.25-alpine` to match the Go version specified in `go.mod`.
 
-  -- Safe column addition
-  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_id BIGINT REFERENCES merchants(id);
-  ```
+### ✅ Test Coverage (Resolved)
+* **The Solution:** Basic unit tests have been successfully created and run for:
+  1. **Signature verification** ([verifier_test.go](file:///home/brown-moses/go/Go/paykitt/paykit/internal/auth/verifier_test.go))
+  2. **Webhook parsing** ([parser_test.go](file:///home/brown-moses/go/Go/paykitt/paykit/internal/payments/parser_test.go))
 
-### 🐳 Dockerfile / Go Version Mismatches
-* **The Problem:** `Dockerfile` is based on `golang:1.22-alpine`, but `go.mod` specifies `go 1.25.0`.
-* **The Solution:** Update the base image in `Dockerfile` to `golang:1.25-alpine` to align compiling versions and avoid compatibility errors.
-
-### 🧪 0% Test Coverage
-* Currently, there are no tests in the codebase.
-* **Recommendation:** Create basic unit tests for:
-  1. **Signature verification** (`internal/auth/verifier_test.go`)
-  2. **Webhook parsing** (`internal/payments/parser_test.go`)
+### ✅ Dead Letter Queue (DLQ) & Metrics (New Features)
+* **The Solution:** A Dead Letter Queue (DLQ) has been implemented via the `delivery_dlq` table, letting operators store, list, and retry permanently failed webhook notifications. Prometheus instrumentation is exposed at `/metrics/prometheus` and merchant-specific transaction volume metrics are exposed at `/metrics` (authenticated).
 
 ### 🤖 CI/CD Pipeline Setup
 A standard student workflow should automatically check code before deployment. Add a simple `.github/workflows/go.yml` file to run tests:
@@ -195,12 +178,10 @@ To deploy this online for free or cheap:
 - [x] **Fix Code Issues:** `slog` usage matches `go vet` expectations.
 - [x] **Fix Webhook Flow:** `:merchant_id` is extracted in `handler.go` and persisted for merchant-scoped notifications.
 - [x] **Fix Retry Logic:** Final retry is correctly marked as `FAILED`.
-
-- [ ] **Make File Migrations Idempotent:** Refactor SQL file to run safely multiple times.
+- [x] **Make File Migrations Idempotent:** Refactor SQL file to run safely multiple times.
 - [x] **Upgrade Docker Build Image:** Match Go runtime in Dockerfile (`1.25`).
-- [ ] **Add Essential Tests:** Validate signature verification to prevent spoofing.
+- [x] **Add Essential Tests:** Validate signature verification to prevent spoofing.
 - [x] **Secure API Keys:** Hash keys in DB instead of plaintext storage.
-
 - [ ] **Deploy Database & App:** Hook up a hosted Postgres (e.g. Neon) and deploy Go code to Railway/Render.
 
 

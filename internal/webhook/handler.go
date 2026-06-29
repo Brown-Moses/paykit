@@ -283,6 +283,7 @@ func (h *Handler) Health(c *gin.Context) {
 // @Description  Returns transaction volume and delivery success rate.
 // @Tags         System
 // @Produce      json
+// @Security     BearerAuth
 // @Success      200  {object}  object{transactions_total=int,transactions_successful=int,transactions_failed=int,delivery_success_rate=string,uptime=string}
 // @Failure      500  {object}  object{error=string}
 // @Router       /metrics [get]

@@ -6,6 +6,100 @@ info:
   title: PayKit — Mobile Money Webhook Engine
   version: "1.0"
 paths:
+  /admin/dlq:
+    get:
+      description: Returns delivery DLQ entries (failed merchant webhook deliveries)
+        for the authenticated merchant.
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Results per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              count:
+                type: integer
+              data:
+                type: array
+              limit:
+                type: integer
+              page:
+                type: integer
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List DLQ records
+      tags:
+      - Admin DLQ
+  /admin/dlq/{id}/retry:
+    post:
+      description: Triggers immediate retry for a permanently failed merchant webhook
+        delivery. On success it resolves the DLQ record.
+      parameters:
+      - description: DLQ id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              status:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Retry a DLQ item immediately
+      tags:
+      - Admin DLQ
   /health:
     get:
       description: Returns server and database status. Use this to verify the service
@@ -62,6 +156,8 @@ paths:
               error:
                 type: string
             type: object
+      security:
+      - BearerAuth: []
       summary: System metrics
       tags:
       - System

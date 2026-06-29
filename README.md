@@ -9,12 +9,13 @@ PayKit acts as a bridge between **MTN MoMo** (the payment provider) and **mercha
 ### Core Workflow
 
 1. **Receive** — MTN MoMo sends a payment webhook to `POST /webhook/momo/:merchant_id`.
-2. **Verify** — PayKit validates the webhook's `X-Signature` using HMAC-SHA256 and checks for replay attacks using the unique `provider_tx_id`.
+2. **Verify** — PayKit validates the webhook's timestamp and `X-Signature` using HMAC-SHA256, checking for replay attacks.
 3. **Parse & Store** — The payload is parsed into a domain model, the payer's phone number (MSISDN) is SHA-256 hashed for privacy, and the transaction is persisted in PostgreSQL.
 4. **Notify** — If the transaction is successful, PayKit asynchronously forwards a lightweight notification to the merchant's configured `webhook_url`.
 5. **Retry** — Failed merchant deliveries are retried up to 3 times with exponential backoff.
-6. **Log** — Every delivery attempt is recorded in a `delivery_logs` table for full observability.
-7. **Query** — Merchants can query their own transactions and delivery logs via a Bearer-token-protected REST API.
+6. **DLQ** — Webhooks that permanently fail delivery after retries are stored in the Dead Letter Queue (`delivery_dlq` table) for manual inspection and retries.
+7. **Log & Instrument** — Every delivery attempt is recorded in a `delivery_logs` table, and system metrics are collected via Prometheus.
+8. **Query & Admin** — Merchants can query their transactions, scoped metrics, and manage DLQ entries via a Bearer-token-protected REST API.
 
 ## Tech Stack
 
@@ -131,8 +132,9 @@ make health      # Curl the /health endpoint
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health & database connectivity check |
-| `POST` | `/webhook/momo/:merchant_id` | Receive MTN MoMo payment webhook |
+| `POST` | `/webhook/momo/:merchant_id` | Receive MTN MoMo payment webhook (IP Whitelisted) |
 | `POST` | `/merchants` | Register a new merchant (returns API key) |
+| `GET` | `/metrics/prometheus` | Prometheus system metrics scrape endpoint |
 
 #### Protected (Bearer Auth)
 
@@ -141,6 +143,9 @@ make health      # Curl the /health endpoint
 | `GET` | `/transactions` | List/filter paginated transactions |
 | `GET` | `/transactions/:id` | Get a single transaction by provider TX ID |
 | `GET` | `/transactions/:id/deliveries` | Get webhook delivery attempts for a transaction |
+| `GET` | `/metrics` | Get transaction & delivery metrics (scoped to merchant) |
+| `GET` | `/admin/dlq` | List delivery DLQ entries for the merchant |
+| `POST` | `/admin/dlq/:id/retry` | Trigger manual retry for a DLQ entry |
 
 #### Documentation
 
@@ -156,6 +161,7 @@ Key tables:
 - `transactions` - Payment events from MTN MoMo
 - `merchants` - Registered merchant accounts
 - `delivery_logs` - Webhook delivery attempt records
+- `delivery_dlq` - Permanently failed deliveries (Dead Letter Queue)
 
 ## Docker
 
