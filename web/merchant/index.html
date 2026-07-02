@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — PayKit Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body class="login-container">
+
+  <div class="card login-card">
+    <div class="card-header" style="justify-content: center; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
+      <div class="brand" style="margin-bottom: 0;">
+        <div class="brand-dot"></div>
+        PayKit Engine
+      </div>
+      <p class="subtitle">Mobile Money Webhook Engine</p>
+    </div>
+
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="api-key">API Key</label>
+        <input type="password" id="api-key" placeholder="pk_live_..." required autocomplete="off">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+        Sign In ⚡
+      </button>
+    </form>
+
+    <div style="margin-top: 2rem; text-align: center; font-size: 0.875rem; color: var(--text-muted);">
+      Need a merchant account? <a href="/portal/register.html" style="color: var(--accent-cyan); text-decoration: none; font-weight: 600;">Register Here &rarr;</a>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    async function handleLogin(e) {
+      e.preventDefault();
+      const apiKey = document.getElementById('api-key').value.trim();
+      if (!apiKey) return;
+
+      try {
+        const btn = document.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Authenticating... 🔑';
+        
+        await API.login(apiKey);
+        Auth.showToast('Login successful!');
+        setTimeout(() => {
+          window.location.href = '/portal/dashboard.html';
+        }, 800);
+      } catch (err) {
+        Auth.showToast(err.message || 'Invalid API Key', 'error');
+        const btn = document.querySelector('button[type="submit"]');
+        btn.disabled = false;
+        btn.textContent = 'Sign In ⚡';
+      }
+    }
+  </script>
+</body>
+</html>

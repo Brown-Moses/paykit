@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overview — Operator Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <h1>All Merchants Overview</h1>
+        <p class="subtitle">Platform-wide merchant accounts and usage statistics</p>
+      </div>
+
+      <!-- Stats summary -->
+      <div class="grid-cols-3">
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">TOTAL MERCHANTS</span>
+            <span style="font-size: 1.25rem;">👥</span>
+          </div>
+          <div class="stat-value" id="stats-total-merchants">0</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">ACTIVE MERCHANTS</span>
+            <span style="font-size: 1.25rem;">🟢</span>
+          </div>
+          <div class="stat-value" id="stats-active-merchants" style="color: var(--accent-emerald);">0</div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">TOTAL MONTHLY USAGE</span>
+            <span style="font-size: 1.25rem;">📊</span>
+          </div>
+          <div class="stat-value" id="stats-total-calls">0</div>
+        </div>
+      </div>
+
+      <!-- Merchants table list -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">👥 Merchant Accounts</h3>
+          <button class="btn btn-primary" onclick="loadMerchants()">🔄 Refresh Data</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Company Name</th>
+                <th>API Key (Hashed)</th>
+                <th>Webhook URL</th>
+                <th>Plan Type</th>
+                <th>Calls Usage</th>
+                <th>Status</th>
+                <th>Created At</th>
+              </tr>
+            </thead>
+            <tbody id="merchants-tbody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading merchants list...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectAdminNavigation('overview');
+      loadMerchants();
+    });
+
+    async function loadMerchants() {
+      try {
+        const merchants = await API.adminListMerchants();
+        renderMerchants(merchants);
+        calculateStats(merchants);
+      } catch (err) {
+        Auth.showToast('Could not load merchants: ' + err.message, 'error');
+      }
+    }
+
+    function renderMerchants(merchants) {
+      const tbody = document.getElementById('merchants-tbody');
+      tbody.innerHTML = '';
+
+      if (!merchants || merchants.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No merchants registered on this platform</td>
+          </tr>
+        `;
+        return;
+      }
+
+      merchants.forEach(m => {
+        const tr = document.createElement('tr');
+        const badgeClass = m.Active ? 'badge-success' : 'badge-danger';
+        const truncatedKey = m.APIKey.substring(0, 10) + '...';
+        
+        // Calculate usage percentage
+        const usagePercent = Math.min(Math.round((m.CurrentMonthCalls / m.MaxMonthlyCalls) * 100), 100);
+        
+        tr.innerHTML = `
+          <td style="font-weight: 600;">#${m.ID}</td>
+          <td style="font-weight: 600; color: var(--text-main);">${m.Name}</td>
+          <td style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--text-muted);">${truncatedKey}</td>
+          <td style="font-size: 0.85rem; word-break: break-all; max-width: 200px;">${m.WebhookURL || '<em style="color: var(--text-muted)">None</em>'}</td>
+          <td style="font-weight: 700; color: var(--accent-cyan); text-transform: uppercase;">${m.PlanType}</td>
+          <td>
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">
+              ${m.CurrentMonthCalls.toLocaleString()} / ${m.MaxMonthlyCalls.toLocaleString()} (${usagePercent}%)
+            </div>
+            <div class="quota-bar-bg" style="height: 6px;">
+              <div class="quota-bar-fill ${usagePercent >= 80 ? 'warning' : ''}" style="width: ${usagePercent}%;"></div>
+            </div>
+          </td>
+          <td><span class="badge ${badgeClass}">${m.Active ? 'Active' : 'Inactive'}</span></td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(m.CreatedAt).toLocaleDateString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function calculateStats(merchants) {
+      document.getElementById('stats-total-merchants').textContent = merchants.length;
+      
+      const activeCount = merchants.filter(m => m.Active).length;
+      document.getElementById('stats-active-merchants').textContent = activeCount;
+
+      const totalCalls = merchants.reduce((sum, m) => sum + m.CurrentMonthCalls, 0);
+      document.getElementById('stats-total-calls').textContent = totalCalls.toLocaleString();
+    }
+  </script>
+</body>
+</html>

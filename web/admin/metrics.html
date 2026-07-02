@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metrics — Operator Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div class="card-header" style="margin-bottom: 0;">
+        <div>
+          <h1>System Metrics Dashboard</h1>
+          <p class="subtitle">Real-time platform metrics scraped directly from Prometheus endpoint</p>
+        </div>
+        <button class="btn btn-primary" onclick="loadPrometheusMetrics()">🔄 Scrape Metrics</button>
+      </div>
+
+      <!-- Live metrics summary cards -->
+      <div class="grid-cols-2">
+        <!-- Raw Scraper View -->
+        <div class="card" style="display: flex; flex-direction: column;">
+          <div class="card-header">
+            <h3 class="card-title">📖 Prometheus Raw Output</h3>
+          </div>
+          <pre id="raw-metrics-display" style="background-color: #060913; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; font-family: 'Fira Code', monospace; font-size: 0.8rem; height: 350px; overflow-y: auto; color: var(--text-muted);">
+Loading raw prometheus metrics...
+          </pre>
+        </div>
+
+        <!-- Parsed Metrics list -->
+        <div class="card" style="display: flex; flex-direction: column;">
+          <div class="card-header">
+            <h3 class="card-title">⚙️ Active Platform Counters</h3>
+          </div>
+          
+          <div class="table-container" style="max-height: 350px; overflow-y: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Metric Name & Labels</th>
+                  <th style="text-align: right;">Value</th>
+                </tr>
+              </thead>
+              <tbody id="parsed-metrics-tbody">
+                <tr>
+                  <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">Parsing metrics...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectAdminNavigation('metrics');
+      loadPrometheusMetrics();
+    });
+
+    async function loadPrometheusMetrics() {
+      try {
+        const res = await fetch('/metrics/prometheus');
+        const text = await res.text();
+
+        // Render Raw text
+        document.getElementById('raw-metrics-display').textContent = text;
+
+        // Parse and render in table
+        parseMetrics(text);
+      } catch (err) {
+        Auth.showToast('Could not scrape prometheus: ' + err.message, 'error');
+      }
+    }
+
+    function parseMetrics(rawText) {
+      const tbody = document.getElementById('parsed-metrics-tbody');
+      tbody.innerHTML = '';
+
+      const lines = rawText.split('\n');
+      let count = 0;
+
+      lines.forEach(line => {
+        // Skip comment lines and empty lines
+        if (line.startsWith('#') || line.trim() === '') return;
+
+        // Separate name/labels and value
+        const spaceIdx = line.lastIndexOf(' ');
+        if (spaceIdx === -1) return;
+
+        const metricStr = line.substring(0, spaceIdx);
+        const value = line.substring(spaceIdx + 1);
+
+        // Beautify the label layout
+        const tr = document.createElement('tr');
+        
+        let labelPart = '';
+        let namePart = metricStr;
+
+        const braceIdx = metricStr.indexOf('{');
+        if (braceIdx !== -1) {
+          namePart = metricStr.substring(0, braceIdx);
+          labelPart = metricStr.substring(braceIdx);
+        }
+
+        tr.innerHTML = `
+          <td>
+            <strong style="color: var(--text-main); font-family: 'Fira Code', monospace; font-size: 0.85rem;">${namePart}</strong>
+            ${labelPart ? `<div style="font-size: 0.75rem; color: var(--accent-cyan); font-family: 'Fira Code', monospace; margin-top: 0.25rem;">${labelPart}</div>` : ''}
+          </td>
+          <td style="text-align: right; font-family: 'Fira Code', monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">${value}</td>
+        `;
+        tbody.appendChild(tr);
+        count++;
+      });
+
+      if (count === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">No metric counters active. Send some webhooks to initialize metrics.</td>
+          </tr>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

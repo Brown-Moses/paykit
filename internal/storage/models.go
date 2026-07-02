@@ -27,12 +27,15 @@ type Transaction struct {
 }
 
 type Merchant struct {
-	ID         int64
-	Name       string
-	APIKey     string
-	WebhookURL string
-	Active     bool
-	CreatedAt  time.Time
+	ID                int64
+	Name              string
+	APIKey            string
+	WebhookURL        string
+	Active            bool
+	PlanType          string
+	MaxMonthlyCalls   int
+	CurrentMonthCalls int
+	CreatedAt         time.Time
 }
 
 type NotifyPayload struct {

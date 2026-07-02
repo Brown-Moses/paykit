@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subscription — PayKit Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <h1>Subscription & Quotas</h1>
+        <p class="subtitle">Monitor your API call limits and choose plans</p>
+      </div>
+
+      <!-- Current plan details -->
+      <div class="grid-cols-2">
+        <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div class="card-header">
+              <span style="font-weight: 600; color: var(--text-muted);">ACTIVE TIER</span>
+              <span class="badge badge-success" id="active-tier-badge" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">Free Plan</span>
+            </div>
+            <div style="font-size: 2.25rem; font-weight: 700; margin: 0.5rem 0;" id="active-tier-title">Free</div>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">
+              Your developer account is currently on the free sandbox plan. Perfect for local prototyping.
+            </p>
+          </div>
+
+          <div class="quota-container" style="margin-top: 2rem;">
+            <div class="quota-meta">
+              <span>Quota Used</span>
+              <strong id="quota-ratio-text">0 / 1,000 calls</strong>
+            </div>
+            <div class="quota-bar-bg">
+              <div class="quota-bar-fill" id="quota-bar-fill"></div>
+            </div>
+            <div class="quota-meta" style="font-size: 0.75rem; color: var(--text-muted);">
+              <span id="quota-percent-text">0% consumed</span>
+              <span>Resets on the 1st of every month</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">💡 Quota Enforcement Policies</h3>
+          </div>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; font-size: 0.95rem;">
+            <li style="display: flex; gap: 0.75rem;">
+              <span>⚠️</span>
+              <div>
+                <strong>80% Quota warning:</strong> A custom warning header <code>X-Quota-Warning</code> is appended to MoMo webhook response payloads.
+              </div>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span>🚫</span>
+              <div>
+                <strong>100% Quota exhaustion:</strong> Incoming MoMo webhooks are blocked and rejected with an HTTP <code>429 Too Many Requests</code> status code.
+              </div>
+            </li>
+            <li style="display: flex; gap: 0.75rem;">
+              <span>🔄</span>
+              <div>
+                <strong>Monthly automatic reset:</strong> Call counts are reset back to 0 on the 1st of every month at midnight.
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Pricing Plans Comparison Grid -->
+      <div>
+        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;">Select & Upgrade Plan</h2>
+        <div class="grid-cols-3">
+          <!-- Free Card -->
+          <div class="card" id="tier-card-free">
+            <div class="card-header">
+              <h3 style="font-weight: 700;">Free</h3>
+              <span style="font-weight: 700; color: var(--accent-cyan);">$0 / mo</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For sandbox testing and micro-projects.</p>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
+              <li>🟢 1,000 monthly calls</li>
+              <li>🟢 HMAC Signature checks</li>
+              <li>🟢 DLQ Support</li>
+              <li>🟢 3 Retries (Backoff)</li>
+            </ul>
+            <button class="btn btn-secondary" style="width: 100%;" disabled id="btn-tier-free">Current Plan</button>
+          </div>
+
+          <!-- Starter Card -->
+          <div class="card" id="tier-card-starter">
+            <div class="card-header">
+              <h3 style="font-weight: 700;">Starter</h3>
+              <span style="font-weight: 700; color: var(--accent-cyan);">$19 / mo</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For growing single-tenant developers.</p>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
+              <li>🟢 10,000 monthly calls</li>
+              <li>🟢 High Availability Hosting</li>
+              <li>🟢 Email Support alerts</li>
+              <li>🟢 Prometheus Custom Scraping</li>
+            </ul>
+            <button class="btn btn-primary" style="width: 100%;" onclick="contactUpgrade('Starter')" id="btn-tier-starter">Upgrade Tier ⚡</button>
+          </div>
+
+          <!-- Growth Card -->
+          <div class="card" id="tier-card-growth">
+            <div class="card-header">
+              <h3 style="font-weight: 700;">Growth</h3>
+              <span style="font-weight: 700; color: var(--accent-cyan);">$49 / mo</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For production scale applications.</p>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
+              <li>🟢 50,000 monthly calls</li>
+              <li>🟢 Priority delivery queues</li>
+              <li>🟢 SLA 99.9% guarantee</li>
+              <li>🟢 White-glove setup onboarding</li>
+            </ul>
+            <button class="btn btn-primary" style="width: 100%;" onclick="contactUpgrade('Growth')" id="btn-tier-growth">Upgrade Tier ⚡</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectNavigation('subscription');
+      loadSubscriptionData();
+    });
+
+    async function loadSubscriptionData() {
+      try {
+        const apiKey = Auth.getAPIKey();
+        const info = await API.login(apiKey);
+
+        const plan = info.plan_type.toLowerCase();
+        
+        // Update values
+        document.getElementById('active-tier-badge').textContent = `${info.plan_type} Plan`;
+        document.getElementById('active-tier-title').textContent = info.plan_type.toUpperCase();
+        document.getElementById('quota-ratio-text').textContent = `${info.current_month_calls.toLocaleString()} / ${info.max_monthly_calls.toLocaleString()} calls`;
+
+        const percent = Math.min(Math.round((info.current_month_calls / info.max_monthly_calls) * 100), 100);
+        document.getElementById('quota-percent-text').textContent = `${percent}% consumed`;
+        
+        const bar = document.getElementById('quota-bar-fill');
+        bar.style.width = `${percent}%`;
+        if (percent >= 80) bar.classList.add('warning');
+
+        // Reset buttons states based on current plan
+        resetButtons(plan);
+      } catch (err) {
+        Auth.showToast('Failed to load subscription details: ' + err.message, 'error');
+      }
+    }
+
+    function resetButtons(currentPlan) {
+      const plans = ['free', 'starter', 'growth'];
+      plans.forEach(p => {
+        const btn = document.getElementById(`btn-tier-${p}`);
+        const card = document.getElementById(`tier-card-${p}`);
+        if (!btn || !card) return;
+
+        if (p === currentPlan) {
+          btn.disabled = true;
+          btn.className = 'btn btn-secondary';
+          btn.textContent = 'Current Plan';
+          card.style.borderColor = 'var(--accent-cyan)';
+          card.style.boxShadow = '0 0 15px var(--glow-cyan)';
+        } else {
+          btn.disabled = false;
+          btn.className = 'btn btn-primary';
+          btn.textContent = 'Upgrade Tier ⚡';
+          card.style.borderColor = 'var(--border-color)';
+          card.style.boxShadow = 'none';
+        }
+      });
+    }
+
+    function contactUpgrade(tierName) {
+      alert(`To upgrade to the ${tierName} tier, please contact support or update via the self-hosted admin console.`);
+    }
+  </script>
+</body>
+</html>

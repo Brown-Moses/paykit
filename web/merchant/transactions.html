@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transactions — PayKit Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <h1>Transactions</h1>
+        <p class="subtitle">Search, filter, and inspect payment notification deliveries</p>
+      </div>
+
+      <!-- Filters Panel -->
+      <div class="card" style="padding: 1.25rem;">
+        <form id="filter-form" onsubmit="handleFilter(event)" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) auto; gap: 1rem; align-items: flex-end;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="search-external-id">Order ID (External ID)</label>
+            <input type="text" id="search-external-id" placeholder="e.g. order_987">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="filter-status">Status</label>
+            <select id="filter-status">
+              <option value="">All Statuses</option>
+              <option value="SUCCESSFUL">Successful</option>
+              <option value="FAILED">Failed</option>
+              <option value="PENDING">Pending</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="height: 42px;">
+            Apply Filters 🔍
+          </button>
+        </form>
+      </div>
+
+      <!-- Transactions Logs Table -->
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider TX ID</th>
+                <th>External ID</th>
+                <th>Amount</th>
+                <th>Currency</th>
+                <th>Status</th>
+                <th>Received At</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transactions-tbody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading transactions...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination">
+          <button class="btn btn-secondary" id="btn-prev" onclick="changePage(-1)" disabled>&larr; Previous</button>
+          <span style="color: var(--text-muted); font-size: 0.9rem;" id="page-indicator">Page 1</span>
+          <button class="btn btn-secondary" id="btn-next" onclick="changePage(1)" disabled>Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail inspect Modal -->
+  <div class="modal-overlay" id="inspect-modal" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="card-header" style="margin-bottom: 1.5rem;">
+        <h3 class="card-title">🔍 Delivery Logs Inspect</h3>
+        <button class="btn btn-secondary" onclick="hideModal()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✕ Close</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div>
+          <label>Provider Transaction ID</label>
+          <div style="font-family: 'Fira Code', monospace; color: var(--accent-cyan);" id="modal-tx-id">-</div>
+        </div>
+        <div>
+          <label>Webhook URL Attempted</label>
+          <div style="word-break: break-all;" id="modal-webhook-url">-</div>
+        </div>
+        <div>
+          <label>Delivery Attempts</label>
+          <div id="modal-attempts-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+            <!-- attempts lists injected here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    let currentPage = 1;
+    const limitPerPage = 15;
+    let currentFilters = { status: '', externalId: '' };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectNavigation('transactions');
+      loadTransactions();
+    });
+
+    async function loadTransactions() {
+      try {
+        const res = await API.getTransactions({
+          page: currentPage,
+          limit: limitPerPage,
+          status: currentFilters.status,
+          externalId: currentFilters.externalId
+        });
+
+        renderTransactions(res.data);
+        updatePagination(res.page, res.count);
+      } catch (err) {
+        Auth.showToast('Could not load transactions: ' + err.message, 'error');
+      }
+    }
+
+    function renderTransactions(txs) {
+      const tbody = document.getElementById('transactions-tbody');
+      tbody.innerHTML = '';
+
+      if (!txs || txs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No matching transactions found</td>
+          </tr>
+        `;
+        return;
+      }
+
+      // If txs is a single object (e.g. from external_id lookup)
+      const list = Array.isArray(txs) ? txs : [txs];
+
+      list.forEach(tx => {
+        const tr = document.createElement('tr');
+        const badgeClass = tx.status === 'SUCCESSFUL' ? 'badge-success' : (tx.status === 'FAILED' ? 'badge-danger' : 'badge-warning');
+        
+        tr.innerHTML = `
+          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-weight: 500;">${tx.provider_tx_id}</td>
+          <td>${tx.external_id}</td>
+          <td>${parseFloat(tx.amount).toLocaleString()}</td>
+          <td style="font-weight: 600;">${tx.currency}</td>
+          <td><span class="badge ${badgeClass}">${tx.status}</span></td>
+          <td style="color: var(--text-muted); font-size: 0.85rem;">${new Date(tx.received_at).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-secondary" onclick="inspectDelivery('${tx.provider_tx_id}')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+              🔍 Inspect
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updatePagination(page, count) {
+      currentPage = page;
+      document.getElementById('page-indicator').textContent = `Page ${page}`;
+      
+      document.getElementById('btn-prev').disabled = page <= 1;
+      // If count returned is less than limit, we know we hit the last page
+      document.getElementById('btn-next').disabled = count < limitPerPage;
+    }
+
+    function changePage(direction) {
+      currentPage += direction;
+      loadTransactions();
+    }
+
+    function handleFilter(e) {
+      e.preventDefault();
+      currentPage = 1;
+      currentFilters.externalId = document.getElementById('search-external-id').value.trim();
+      currentFilters.status = document.getElementById('filter-status').value;
+      loadTransactions();
+    }
+
+    async function inspectDelivery(txId) {
+      try {
+        const res = await API.getDeliveryLogs(txId);
+        
+        document.getElementById('modal-tx-id').textContent = res.transaction_id;
+        document.getElementById('modal-webhook-url').textContent = res.webhook_url;
+        
+        const list = document.getElementById('modal-attempts-list');
+        list.innerHTML = '';
+
+        if (!res.logs || res.logs.length === 0) {
+          list.innerHTML = `<div style="color: var(--text-muted); font-size: 0.875rem;">No delivery attempts logged. Transaction may not be SUCCESSFUL or failed before delivery.</div>`;
+        } else {
+          res.logs.forEach(log => {
+            const div = document.createElement('div');
+            div.style.padding = '0.75rem';
+            div.style.backgroundColor = 'var(--bg-input)';
+            div.style.border = '1px solid var(--border-color)';
+            div.style.borderRadius = '6px';
+            div.style.display = 'flex';
+            div.style.flexDirection = 'column';
+            div.style.gap = '0.25rem';
+            
+            const badgeClass = log.Status === 'SUCCESS' ? 'badge-success' : 'badge-danger';
+            div.innerHTML = `
+              <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                <span style="font-weight: 600;">Attempt #${log.Attempt + 1}</span>
+                <span class="badge ${badgeClass}">${log.Status}</span>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted);">
+                Response Code: <strong style="color: var(--text-main);">${log.ResponseCode || 'N/A'}</strong>
+              </div>
+              ${log.ErrorMessage ? `<div style="font-size: 0.8rem; color: var(--accent-rose); font-family: 'Fira Code', monospace; word-break: break-all;">Error: ${log.ErrorMessage}</div>` : ''}
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-align: right;">
+                ${new Date(log.DeliveredAt).toLocaleString()}
+              </div>
+            `;
+            list.appendChild(div);
+          });
+        }
+
+        document.getElementById('inspect-modal').style.display = 'flex';
+      } catch (err) {
+        Auth.showToast('Could not fetch delivery details: ' + err.message, 'error');
+      }
+    }
+
+    function hideModal() {
+      document.getElementById('inspect-modal').style.display = 'none';
+    }
+
+    function closeModal(e) {
+      if (e.target.id === 'inspect-modal') {
+        hideModal();
+      }
+    }
+  </script>
+</body>
+</html>

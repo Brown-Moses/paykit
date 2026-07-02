@@ -60,6 +60,7 @@ Visit `http://localhost:8080/health` to verify it's working.
 
 ```bash
 # Database connection (required)
+# Matches Postgres connection details for multi-tenant metadata & transaction logging
 DATABASE_URL=postgres://paykit:paykit_secret@host:5432/paykit?sslmode=require
 
 # MTN MoMo webhook secret (required)
@@ -67,8 +68,9 @@ DATABASE_URL=postgres://paykit:paykit_secret@host:5432/paykit?sslmode=require
 # godotenv loads the last value if duplicated — causes silent signature mismatches.
 MOMO_WEBHOOK_SECRET=your_shared_secret_from_mtn_portal
 
-# Server port (optional, defaults to 8080)
-PORT=8080
+# Operator Access Password (required for operator control portal)
+# Defaults to "admin" if empty
+ADMIN_PASSWORD=your_strong_operator_password
 ```
 
 #### Optional Security
@@ -82,6 +84,32 @@ WEBHOOK_MAX_CLOCK_SKEW_SECONDS=300
 ```
 
 > **Critical:** Never define `MOMO_WEBHOOK_SECRET` twice in `.env`. Duplicate entries cause silent signature failures during webhook validation.
+
+---
+
+### Self-Hosted Portals
+
+PayKit provides two lightweight, responsive user portals built into the engine with no external runtime dependencies:
+
+#### 1. Developer Portal (`/portal/*`)
+A portal for merchants to manage their credentials, configure endpoint URLs, and monitor usage limits.
+*   **Access path:** `http://localhost:8080/portal/index.html`
+*   **Authentication:** Authenticates securely using the merchant's unique API key (`pk_live_...`).
+*   **Key Features:**
+    *   Dynamic usage meter displaying monthly calls and quota usage.
+    *   Self-management webhook URL setup panel.
+    *   Search and filterable transaction lists.
+    *   Dead Letter Queue (DLQ) retry panel for failed endpoints.
+    *   Subscription details and pricing tier upgrade guides.
+
+#### 2. Operator Portal (`/operator/*`)
+A control panel for system operators to manage merchant status and quotas.
+*   **Access path:** `http://localhost:8080/operator/index.html`
+*   **Authentication:** HTTP Basic Auth (Username: `admin`, Password: value of `ADMIN_PASSWORD`).
+*   **Key Features:**
+    *   All Merchants Overview: lists all accounts, keys, status, and quotas.
+    *   Quota & Status Control Panel: activate/deactivate accounts and adjust limits.
+    *   System Metrics Dashboard: scrapers and parsers showing live Prometheus counters.
 
 ---
 
@@ -368,11 +396,11 @@ curl -H "Authorization: Bearer pk_live_abc123def456" \
 ```bash
 # List failed deliveries
 curl -H "Authorization: Bearer pk_live_abc123def456" \
-     http://your-paykit.com/admin/dlq
+     http://your-paykit.com/dlq
 
 # Retry a specific failed delivery
 curl -X POST -H "Authorization: Bearer pk_live_abc123def456" \
-     http://your-paykit.com/admin/dlq/{id}/retry
+     http://your-paykit.com/dlq/{id}/retry
 ```
 
 ---
@@ -489,7 +517,7 @@ Set your merchant `webhook_url` to an invalid/unreachable URL, then send a valid
 
 ```bash
 curl -H "Authorization: Bearer your_api_key" \
-     http://localhost:8080/admin/dlq
+     http://localhost:8080/dlq
 ```
 
 Expected: one record with `status: "FAILED"`
@@ -499,7 +527,7 @@ Then retry it:
 ```bash
 curl -X POST \
      -H "Authorization: Bearer your_api_key" \
-     http://localhost:8080/admin/dlq/{id}/retry
+     http://localhost:8080/dlq/{id}/retry
 ```
 
 ---
@@ -563,5 +591,34 @@ Expected: list of processed transactions scoped to your merchant.
 - Metrics: `http://localhost:8080/metrics/prometheus`
 
 ---
+
+##  example to try
+#example
+
+curl -X POST http://localhost:8080/merchants \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Shop",
+    "webhook_url": "https://acf816828d22020689cegwxh1hhyyyyyb.oast.pro"
+  }'
+
+api_key:     pk_live_2350a794fbc9059929c1d94cf8b06fb2
+merchant_id: 2
+webhook_url: https://acf816828d22020689cegwxh1hhyyyyyb.oast.pro
+
+TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+TXID="TX-$(date +%s)"
+BODY="{\"amount\":\"5000\",\"currency\":\"RWF\",\"externalId\":\"EXT-001\",\"transactionId\":\"$TXID\",\"status\":\"SUCCESSFUL\",\"timestamp\":\"$TS\"}"
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "test_secret" | awk '{print $2}')
+
+echo "TXID: $TXID"
+echo "SIG: $SIG"
+
+curl -X POST http://localhost:8080/webhook/momo/2 \
+  -H "Content-Type: application/json" \
+  -H "X-Signature: $SIG" \
+  -d "$BODY"
+TXID: TX-1782552939
+SIG: 45236ab58f6dccbef81c027a00dec0c5744ffa69c81d1e422c6860a54c3a3d58
 
 *Last updated: June 2026*

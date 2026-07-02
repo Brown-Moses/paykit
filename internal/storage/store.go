@@ -72,12 +72,18 @@ func (s *Store) GetByID(providerTxID string) (*Transaction, error) {
 // CreateMerchant inserts a new merchant and returns their ID
 func (s *Store) CreateMerchant(m Merchant) (int64, error) {
 	hashedKey := hashAPIKey(m.APIKey)
+	if m.PlanType == "" {
+		m.PlanType = "free"
+	}
+	if m.MaxMonthlyCalls == 0 {
+		m.MaxMonthlyCalls = 1000
+	}
 	var id int64
 	err := s.db.QueryRow(
 		context.Background(),
-		`INSERT INTO merchants (name, api_key, webhook_url)
-         VALUES ($1, $2, $3) RETURNING id`,
-		m.Name, hashedKey, m.WebhookURL,
+		`INSERT INTO merchants (name, api_key, webhook_url, plan_type, max_monthly_calls, current_month_calls)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		m.Name, hashedKey, m.WebhookURL, m.PlanType, m.MaxMonthlyCalls, m.CurrentMonthCalls,
 	).Scan(&id)
 	return id, err
 }
@@ -88,10 +94,10 @@ func (s *Store) GetMerchantByAPIKey(apiKey string) (*Merchant, error) {
 	m := &Merchant{}
 	err := s.db.QueryRow(
 		context.Background(),
-		`SELECT id, name, api_key, webhook_url, active, created_at
+		`SELECT id, name, api_key, webhook_url, active, plan_type, max_monthly_calls, current_month_calls, created_at
          FROM merchants WHERE api_key = $1 AND active = true`,
 		hashedKey,
-	).Scan(&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active, &m.CreatedAt)
+	).Scan(&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active, &m.PlanType, &m.MaxMonthlyCalls, &m.CurrentMonthCalls, &m.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -164,14 +170,85 @@ func (s *Store) GetMerchantByID(id int64) (*Merchant, error) {
 	m := &Merchant{}
 	err := s.db.QueryRow(
 		context.Background(),
-		`SELECT id, name, api_key, webhook_url, active, created_at
+		`SELECT id, name, api_key, webhook_url, active, plan_type, max_monthly_calls, current_month_calls, created_at
          FROM merchants WHERE id = $1 AND active = true`,
 		id,
-	).Scan(&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active, &m.CreatedAt)
+	).Scan(&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active, &m.PlanType, &m.MaxMonthlyCalls, &m.CurrentMonthCalls, &m.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return m, nil
+}
+
+// IncrementMerchantCallCount increments the call usage counter for a merchant
+func (s *Store) IncrementMerchantCallCount(id int64) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE merchants SET current_month_calls = current_month_calls + 1 WHERE id = $1`,
+		id,
+	)
+	return err
+}
+
+// UpdateMerchantWebhookURL updates the webhook URL for a merchant
+func (s *Store) UpdateMerchantWebhookURL(id int64, webhookURL string) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE merchants SET webhook_url = $1 WHERE id = $2`,
+		webhookURL,
+		id,
+	)
+	return err
+}
+
+// ListAllMerchants returns all merchants in the system (for operator dashboard)
+func (s *Store) ListAllMerchants() ([]Merchant, error) {
+	rows, err := s.db.Query(
+		context.Background(),
+		`SELECT id, name, api_key, webhook_url, active, plan_type, max_monthly_calls, current_month_calls, created_at
+		 FROM merchants
+		 ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var merchants []Merchant
+	for rows.Next() {
+		var m Merchant
+		if err := rows.Scan(
+			&m.ID, &m.Name, &m.APIKey, &m.WebhookURL, &m.Active,
+			&m.PlanType, &m.MaxMonthlyCalls, &m.CurrentMonthCalls, &m.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		merchants = append(merchants, m)
+	}
+	return merchants, nil
+}
+
+// SetMerchantActive activates or deactivates a merchant
+func (s *Store) SetMerchantActive(id int64, active bool) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE merchants SET active = $1 WHERE id = $2`,
+		active,
+		id,
+	)
+	return err
+}
+
+// UpdateMerchantQuota updates the plan type and maximum monthly calls limit for a merchant
+func (s *Store) UpdateMerchantQuota(id int64, planType string, maxCalls int) error {
+	_, err := s.db.Exec(
+		context.Background(),
+		`UPDATE merchants SET plan_type = $1, max_monthly_calls = $2 WHERE id = $3`,
+		planType,
+		maxCalls,
+		id,
+	)
+	return err
 }
 
 func (s *Store) InsertDeliveryLog(log DeliveryLog) error {

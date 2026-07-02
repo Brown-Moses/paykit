@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — PayKit Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Sidebar navigation placeholder -->
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div class="card-header" style="margin-bottom: 0;">
+        <div>
+          <h1 id="welcome-text">Loading Dashboard...</h1>
+          <p class="subtitle">Real-time mobile money webhook statistics</p>
+        </div>
+        <div id="quota-badge-container"></div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid-cols-3">
+        <!-- Quota Usage Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">MONTHLY WEBHOOK CALLS</span>
+            <span style="font-size: 1.25rem;">📦</span>
+          </div>
+          <div class="stat-value" id="quota-ratio">0 / 0</div>
+          <div class="quota-container">
+            <div class="quota-bar-bg">
+              <div class="quota-bar-fill" id="quota-bar-fill"></div>
+            </div>
+            <div class="quota-meta">
+              <span id="quota-percent">0% Used</span>
+              <span id="quota-warning-text" style="color: var(--accent-rose); font-weight: 700; display: none;">Warning: 80% quota hit</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Success Rate Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">WEBHOOK SUCCESS RATE</span>
+            <span style="font-size: 1.25rem;">⚡</span>
+          </div>
+          <div class="stat-value" id="delivery-success-rate">N/A</div>
+          <p class="stat-desc">
+            <span class="stat-trend-up" id="delivery-trend">🟢 Active Delivery logs</span>
+          </p>
+        </div>
+
+        <!-- Volume Overview Card -->
+        <div class="card">
+          <div class="card-header">
+            <span style="font-weight: 600; color: var(--text-muted);">VOLUME TOTAL</span>
+            <span style="font-size: 1.25rem;">📊</span>
+          </div>
+          <div class="stat-value" id="tx-total">0</div>
+          <p class="stat-desc" id="tx-success-failed-breakdown">
+            Successful: 0 | Failed: 0
+          </p>
+        </div>
+      </div>
+
+      <!-- Chart and Webhook Settings -->
+      <div class="grid-cols-2">
+        <!-- Live chart -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><span>📈</span> Webhook Volume Trend</h3>
+          </div>
+          <div id="metrics-chart" style="height: 220px; width: 100%; display: flex; align-items: center; justify-content: center;">
+            Loading chart...
+          </div>
+        </div>
+
+        <!-- Webhook URL Configuration -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><span>⚙️</span> Webhook Configuration</h3>
+          </div>
+          <form id="webhook-form" onsubmit="updateWebhook(event)" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="webhook-url-input">Merchant Webhook Endpoint</label>
+              <input type="text" id="webhook-url-input" placeholder="https://api.yourdomain.com/webhooks/momo" required>
+              <p class="subtitle" style="font-size: 0.8rem; margin-top: 0.25rem;">
+                PayKit will POST MTN MoMo notification payloads to this URL.
+              </p>
+            </div>
+            <button type="submit" class="btn btn-primary" style="align-self: flex-start;">
+              Save Webhook URL 💾
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Recent Transactions Table -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title"><span>💸</span> Recent Transactions</h3>
+          <a href="/portal/transactions.html" style="color: var(--accent-cyan); text-decoration: none; font-size: 0.875rem; font-weight: 600;">
+            View All Transactions &rarr;
+          </a>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Provider TX ID</th>
+                <th>External ID</th>
+                <th>Amount</th>
+                <th>Currency</th>
+                <th>Status</th>
+                <th>Received At</th>
+              </tr>
+            </thead>
+            <tbody id="transactions-tbody">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading transactions...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script src="/portal/charts.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectNavigation('dashboard');
+      loadDashboardData();
+    });
+
+    async function loadDashboardData() {
+      try {
+        // Fetch current subscription/quota status via login request mock or endpoints
+        // Note: we can use API.getMetrics() or hit POST /auth/login with the cached key to reload quota details!
+        const apiKey = Auth.getAPIKey();
+        const info = await API.login(apiKey); // Refreshes local storage plan/quota values!
+        
+        // Render quota dashboard elements
+        document.getElementById('welcome-text').textContent = `Welcome back, ${info.name}!`;
+        document.getElementById('quota-ratio').textContent = `${info.current_month_calls} / ${info.max_monthly_calls}`;
+        
+        // Calculate quota bar
+        const percent = Math.min(Math.round((info.current_month_calls / info.max_monthly_calls) * 100), 100);
+        document.getElementById('quota-percent').textContent = `${percent}% Used`;
+        
+        const bar = document.getElementById('quota-bar-fill');
+        bar.style.width = `${percent}%`;
+        if (percent >= 80) {
+          bar.classList.add('warning');
+          document.getElementById('quota-warning-text').style.display = 'inline';
+        }
+
+        // Set webhook URL input
+        if (info.webhook_url) {
+          document.getElementById('webhook-url-input').value = info.webhook_url;
+        }
+
+        // Get system metrics
+        const metrics = await API.getMetrics();
+        document.getElementById('delivery-success-rate').textContent = metrics.delivery_success_rate;
+        document.getElementById('tx-total').textContent = metrics.transactions_total;
+        document.getElementById('tx-success-failed-breakdown').innerHTML = `
+          Successful: <span style="color: var(--accent-emerald)">${metrics.transactions_successful}</span> | Failed: <span style="color: var(--accent-rose)">${metrics.transactions_failed}</span>
+        `;
+
+        // Fetch recent transactions
+        const txRes = await API.getTransactions({ page: 1, limit: 5 });
+        renderRecentTransactions(txRes.data);
+
+        // Render line chart from recent traffic count
+        // Group transactions by day to count call volumes
+        const counts = [0, 0, 0, 0, 0, 0, metrics.transactions_total]; // Simple mockup visualization fallback
+        const labels = ['Day -6', 'Day -5', 'Day -4', 'Day -3', 'Day -2', 'Day -1', 'Today'];
+        Charts.renderLineChart('metrics-chart', counts, labels);
+
+      } catch (err) {
+        Auth.showToast('Failed to load dashboard data: ' + err.message, 'error');
+      }
+    }
+
+    function renderRecentTransactions(txs) {
+      const tbody = document.getElementById('transactions-tbody');
+      tbody.innerHTML = '';
+
+      if (!txs || txs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No recent transactions found</td>
+          </tr>
+        `;
+        return;
+      }
+
+      txs.forEach(tx => {
+        const tr = document.createElement('tr');
+        const badgeClass = tx.status === 'SUCCESSFUL' ? 'badge-success' : (tx.status === 'FAILED' ? 'badge-danger' : 'badge-warning');
+        
+        tr.innerHTML = `
+          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-weight: 500;">${tx.provider_tx_id}</td>
+          <td>${tx.external_id}</td>
+          <td>${parseFloat(tx.amount).toLocaleString()}</td>
+          <td style="font-weight: 600;">${tx.currency}</td>
+          <td><span class="badge ${badgeClass}">${tx.status}</span></td>
+          <td style="color: var(--text-muted); font-size: 0.85rem;">${new Date(tx.received_at).toLocaleString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function updateWebhook(e) {
+      e.preventDefault();
+      const url = document.getElementById('webhook-url-input').value.trim();
+
+      try {
+        const btn = document.querySelector('#webhook-form button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        
+        const res = await API.updateWebhookURL(url);
+        Auth.showToast(res.message);
+        
+        // Refresh local storage cache
+        const info = await API.login(Auth.getAPIKey());
+        Auth.injectNavigation('dashboard');
+      } catch (err) {
+        Auth.showToast(err.message || 'Failed to update webhook URL', 'error');
+      } finally {
+        const btn = document.querySelector('#webhook-form button[type="submit"]');
+        btn.disabled = false;
+        btn.textContent = 'Save Webhook URL 💾';
+      }
+    }
+  </script>
+</body>
+</html>

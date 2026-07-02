@@ -98,7 +98,17 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 		return
 	}
-	transaction.MerchantID = merchantID
+	merchant := auth.MerchantFrom(c)
+	if merchant == nil {
+		var err error
+		merchant, err = h.store.GetMerchantByID(merchantID)
+		if err != nil {
+			slog.Info("notifier: could not find merchant", "merchant_id", merchantID, "error", err)
+			c.JSON(http.StatusNotFound, gin.H{"error": "merchant not found"})
+			return
+		}
+	}
+	transaction.MerchantID = merchant.ID
 
 	// 5. Save to Postgres
 	if err := h.store.Insert(*transaction); err != nil {
@@ -106,15 +116,14 @@ func (h *Handler) HandleMoMoWebhook(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not save transaction"})
 		return
 	}
-	// 6. Fetch merchant by merchant_id on the transaction then notify async
-	if transaction.MerchantID != 0 {
-		merchant, err := h.store.GetMerchantByID(transaction.MerchantID)
-		if err == nil {
-			go payments.NotifyMerchant(h.store, merchant, transaction)
-		} else {
-			slog.Info("notifier: could not find merchant", "merchant_id", transaction.MerchantID, "error", err)
-		}
+
+	// Increment call count
+	if err := h.store.IncrementMerchantCallCount(merchant.ID); err != nil {
+		slog.Error("failed to increment merchant call count", "merchant_id", merchant.ID, "error", err)
 	}
+
+	// 6. Notify async using the retrieved merchant
+	go payments.NotifyMerchant(h.store, merchant, transaction)
 
 	slog.Info("transaction received",
 		"tx_id", transaction.ProviderTxID,

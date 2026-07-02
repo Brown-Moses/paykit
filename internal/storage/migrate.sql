@@ -21,13 +21,21 @@ CREATE TABLE IF NOT EXISTS transactions (
 
 -- Merchants
 CREATE TABLE IF NOT EXISTS merchants (
-    id          BIGSERIAL PRIMARY KEY,
-    name        TEXT        NOT NULL,
-    api_key     TEXT        NOT NULL UNIQUE,
-    webhook_url TEXT,
-    active      BOOLEAN     NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                  BIGSERIAL PRIMARY KEY,
+    name                TEXT        NOT NULL,
+    api_key             TEXT        NOT NULL UNIQUE,
+    webhook_url         TEXT,
+    active              BOOLEAN     NOT NULL DEFAULT true,
+    plan_type           VARCHAR(20) NOT NULL DEFAULT 'free',
+    max_monthly_calls   INT         NOT NULL DEFAULT 1000,
+    current_month_calls INT         NOT NULL DEFAULT 0,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add subscription/quota fields to merchants for existing installations (idempotent)
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS plan_type VARCHAR(20) DEFAULT 'free';
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS max_monthly_calls INT DEFAULT 1000;
+ALTER TABLE merchants ADD COLUMN IF NOT EXISTS current_month_calls INT DEFAULT 0;
 
 -- Add merchant_id to transactions (idempotent creation)
 ALTER TABLE transactions

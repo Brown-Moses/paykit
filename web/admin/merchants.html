@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage — Operator Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <h1>Manage Merchant Quotas & Status</h1>
+        <p class="subtitle">Update subscriber tiers and toggle merchant API access</p>
+      </div>
+
+      <!-- Merchants table control panel -->
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Company Name</th>
+                <th>Status</th>
+                <th>Plan Type</th>
+                <th>Max Limit</th>
+                <th>Toggle Status</th>
+                <th>Adjust Plan</th>
+              </tr>
+            </thead>
+            <tbody id="merchants-tbody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading merchants...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan Update Dialog Modal -->
+  <div class="modal-overlay" id="plan-modal" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="card-header" style="margin-bottom: 1.5rem;">
+        <h3 class="card-title">⚙️ Adjust Subscription Quota</h3>
+        <button class="btn btn-secondary" onclick="hideModal()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">✕ Close</button>
+      </div>
+
+      <form id="plan-form" onsubmit="submitQuotaChange(event)">
+        <input type="hidden" id="modal-merchant-id">
+        
+        <div class="form-group">
+          <label for="merchant-name-display">Merchant Name</label>
+          <input type="text" id="merchant-name-display" disabled style="background-color: var(--bg-main);">
+        </div>
+
+        <div class="form-group">
+          <label for="plan-select">Plan Tier Type</label>
+          <select id="plan-select" required>
+            <option value="free">FREE</option>
+            <option value="starter">STARTER</option>
+            <option value="growth">GROWTH</option>
+            <option value="enterprise">ENTERPRISE</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="max-calls-input">Max Monthly Calls Limit</label>
+          <input type="number" id="max-calls-input" min="1" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+          Update Plan Quota 💾
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectAdminNavigation('merchants');
+      loadMerchants();
+    });
+
+    async function loadMerchants() {
+      try {
+        const merchants = await API.adminListMerchants();
+        renderMerchants(merchants);
+      } catch (err) {
+        Auth.showToast('Could not load merchants: ' + err.message, 'error');
+      }
+    }
+
+    function renderMerchants(merchants) {
+      const tbody = document.getElementById('merchants-tbody');
+      tbody.innerHTML = '';
+
+      if (!merchants || merchants.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">No merchants registered</td>
+          </tr>
+        `;
+        return;
+      }
+
+      merchants.forEach(m => {
+        const tr = document.createElement('tr');
+        const badgeClass = m.Active ? 'badge-success' : 'badge-danger';
+        
+        tr.innerHTML = `
+          <td style="font-weight: 600;">#${m.ID}</td>
+          <td style="font-weight: 600; color: var(--text-main);">${m.Name}</td>
+          <td><span class="badge ${badgeClass}" id="badge-${m.ID}">${m.Active ? 'Active' : 'Inactive'}</span></td>
+          <td style="text-transform: uppercase; font-weight: 700; color: var(--accent-cyan);" id="plan-${m.ID}">${m.PlanType}</td>
+          <td style="font-weight: 600;" id="limit-${m.ID}">${m.MaxMonthlyCalls.toLocaleString()}</td>
+          <td>
+            <button class="btn ${m.Active ? 'btn-danger' : 'btn-success'}" id="btn-toggle-${m.ID}" onclick="toggleStatus(${m.ID}, ${m.Active})" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; min-width: 100px;">
+              ${m.Active ? '🚫 Deactivate' : '🟢 Activate'}
+            </button>
+          </td>
+          <td>
+            <button class="btn btn-secondary" onclick="openPlanModal(${m.ID}, '${m.Name.replace(/'/g, "\\'")}', '${m.PlanType}', ${m.MaxMonthlyCalls})" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+              🛠️ Adjust Plan
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function toggleStatus(id, currentlyActive) {
+      const targetState = !currentlyActive;
+      try {
+        const btn = document.getElementById(`btn-toggle-${id}`);
+        btn.disabled = true;
+        
+        await API.adminToggleMerchant(id, targetState);
+        Auth.showToast(`Merchant status updated successfully`);
+        
+        // Reload list to sync buttons state
+        loadMerchants();
+      } catch (err) {
+        Auth.showToast('Could not update status: ' + err.message, 'error');
+        document.getElementById(`btn-toggle-${id}`).disabled = false;
+      }
+    }
+
+    function openPlanModal(id, name, planType, limit) {
+      document.getElementById('modal-merchant-id').value = id;
+      document.getElementById('merchant-name-display').value = name;
+      document.getElementById('plan-select').value = planType.toLowerCase();
+      document.getElementById('max-calls-input').value = limit;
+      
+      document.getElementById('plan-modal').style.display = 'flex';
+    }
+
+    async function submitQuotaChange(e) {
+      e.preventDefault();
+      const id = document.getElementById('modal-merchant-id').value;
+      const planType = document.getElementById('plan-select').value;
+      const maxCalls = document.getElementById('max-calls-input').value;
+
+      try {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Updating...';
+
+        await API.adminUpdateQuota(id, planType, maxCalls);
+        Auth.showToast('Quota updated successfully');
+        hideModal();
+        loadMerchants();
+      } catch (err) {
+        Auth.showToast('Could not update plan quota: ' + err.message, 'error');
+      } finally {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = false;
+        btn.textContent = 'Update Plan Quota 💾';
+      }
+    }
+
+    function hideModal() {
+      document.getElementById('plan-modal').style.display = 'none';
+    }
+
+    function closeModal(e) {
+      if (e.target.id === 'plan-modal') {
+        hideModal();
+      }
+    }
+  </script>
+</body>
+</html>

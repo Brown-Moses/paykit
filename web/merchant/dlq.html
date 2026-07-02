@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DLQ Deliveries — PayKit Portal</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <h1>Dead Letter Queue (DLQ)</h1>
+        <p class="subtitle">Inspect and re-trigger permanently failed webhook notifications</p>
+      </div>
+
+      <!-- DLQ List Panel -->
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>DLQ ID</th>
+                <th>TX ID</th>
+                <th>Destination URL</th>
+                <th>Attempts</th>
+                <th>Response</th>
+                <th>Last Error</th>
+                <th>Status</th>
+                <th>Failed At</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="dlq-tbody">
+              <tr>
+                <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading DLQ records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div class="pagination">
+          <button class="btn btn-secondary" id="btn-prev" onclick="changePage(-1)" disabled>&larr; Previous</button>
+          <span style="color: var(--text-muted); font-size: 0.9rem;" id="page-indicator">Page 1</span>
+          <button class="btn btn-secondary" id="btn-next" onclick="changePage(1)" disabled>Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    let currentPage = 1;
+    const limitPerPage = 15;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      Auth.injectNavigation('dlq');
+      loadDLQ();
+    });
+
+    async function loadDLQ() {
+      try {
+        const res = await API.getDLQ({ page: currentPage, limit: limitPerPage });
+        renderDLQ(res.data);
+        updatePagination(res.page, res.count);
+      } catch (err) {
+        Auth.showToast('Could not load DLQ records: ' + err.message, 'error');
+      }
+    }
+
+    function renderDLQ(items) {
+      const tbody = document.getElementById('dlq-tbody');
+      tbody.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No failed webhook deliveries in DLQ</td>
+          </tr>
+        `;
+        return;
+      }
+
+      items.forEach(item => {
+        const tr = document.createElement('tr');
+        const badgeClass = item.Status === 'RESOLVED' ? 'badge-success' : (item.Status === 'PENDING' || item.Status === 'REQUEUED' ? 'badge-warning' : 'badge-danger');
+        
+        const isActionable = item.Status !== 'RESOLVED';
+        
+        tr.innerHTML = `
+          <td style="font-weight: 600;">#${item.ID}</td>
+          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-size: 0.85rem;">tx_id:${item.TransactionID}</td>
+          <td style="font-size: 0.85rem; word-break: break-all; max-width: 200px;">${item.WebhookURL}</td>
+          <td style="text-align: center; font-weight: 600;">${item.AttemptCount}</td>
+          <td style="font-weight: 700; color: ${item.LastResponseCode >= 200 && item.LastResponseCode < 300 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
+            ${item.LastResponseCode || 'N/A'}
+          </td>
+          <td style="font-family: 'Fira Code', monospace; font-size: 0.75rem; color: var(--accent-rose); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.LastError || ''}">
+            ${item.LastError || 'None'}
+          </td>
+          <td><span class="badge ${badgeClass}">${item.Status}</span></td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(item.CreatedAt).toLocaleString()}</td>
+          <td>
+            <button class="btn btn-primary" onclick="triggerRetry(${item.ID})" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" ${isActionable ? '' : 'disabled'}>
+              🔄 Retry
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updatePagination(page, count) {
+      currentPage = page;
+      document.getElementById('page-indicator').textContent = `Page ${page}`;
+      document.getElementById('btn-prev').disabled = page <= 1;
+      document.getElementById('btn-next').disabled = count < limitPerPage;
+    }
+
+    function changePage(direction) {
+      currentPage += direction;
+      loadDLQ();
+    }
+
+    async function triggerRetry(id) {
+      try {
+        const res = await API.retryDLQ(id);
+        Auth.showToast('Retry triggered successfully!');
+        loadDLQ();
+      } catch (err) {
+        Auth.showToast('Retry failed: ' + err.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -100,6 +100,57 @@ paths:
       summary: Retry a DLQ item immediately
       tags:
       - Admin DLQ
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Logs in a merchant using their API key and returns current status
+        and usage.
+      parameters:
+      - description: Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            api_key:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              current_month_calls:
+                type: integer
+              id:
+                type: integer
+              max_monthly_calls:
+                type: integer
+              name:
+                type: string
+              plan_type:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      summary: Authenticate merchant
+      tags:
+      - Auth
   /health:
     get:
       description: Returns server and database status. Use this to verify the service
@@ -128,6 +179,59 @@ paths:
       summary: Health check
       tags:
       - System
+  /merchants/webhook-url:
+    put:
+      consumes:
+      - application/json
+      description: Updates the destination URL where PayKit forwards verified notifications.
+      parameters:
+      - description: Webhook URL details
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            webhook_url:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+              webhook_url:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            properties:
+              error:
+                type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update merchant webhook URL
+      tags:
+      - Merchants
   /metrics:
     get:
       description: Returns transaction volume and delivery success rate.

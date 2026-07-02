@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"time"
 
 	swaggerFiles "github.com/swaggo/files"
@@ -21,6 +22,20 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 
 	webHook := webhooks.NewHandler(verifier, store, startTime)
 
+	// Admin Password Auth setup
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = "admin" // secure default/fallback
+	}
+
+	// Static UI assets routing
+	r.Static("/portal", "./web/merchant")
+
+	operatorPortal := r.Group("/operator", gin.BasicAuth(gin.Accounts{
+		"admin": adminPassword,
+	}))
+	operatorPortal.Static("", "./web/admin")
+
 	// System
 	r.GET("/health", webHook.Health)
 
@@ -33,12 +48,13 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 	r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Public
-	//  r.POST("/webhook/momo/:merchant_id", webHook.HandleMoMoWebhook)
 	r.POST("/merchants", webHook.CreateMerchant)
+	r.POST("/auth/login", webHook.Login)
 
-	// Webhook — IP whitelisted, no API key needed
+	// Webhook — IP whitelisted, no API key needed, quota enforced
 	r.POST("/webhook/momo/:merchant_id",
 		auth.IPWhitelist(),
+		auth.TierEnforcement(store),
 		webHook.HandleMoMoWebhook,
 	)
 
@@ -50,10 +66,22 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 		protected.GET("/transactions/:id", webHook.GetTransaction)
 		protected.GET("/transactions/:id/deliveries", webHook.GetDeliveryLogs)
 		protected.GET("/metrics", webHook.Metrics)
+		protected.PUT("/merchants/webhook-url", webHook.UpdateWebhookURL)
 
-		// Admin — DLQ
-		protected.GET("/admin/dlq", webHook.ListDLQ)
-		protected.POST("/admin/dlq/:id/retry", webHook.RetryDLQ)
+		// DLQ — merchant specific
+		protected.GET("/dlq", webHook.ListDLQ)
+		protected.POST("/dlq/:id/retry", webHook.RetryDLQ)
 	}
+
+	// Operator Admin API endpoints
+	adminAPI := r.Group("/admin/api", gin.BasicAuth(gin.Accounts{
+		"admin": adminPassword,
+	}))
+	{
+		adminAPI.GET("/merchants", webHook.AdminListMerchants)
+		adminAPI.PUT("/merchants/:id/toggle", webHook.AdminToggleMerchant)
+		adminAPI.PUT("/merchants/:id/quota", webHook.AdminUpdateMerchantQuota)
+	}
+
 	return r
 }
