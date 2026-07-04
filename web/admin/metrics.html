@@ -5,6 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Metrics — Operator Portal</title>
   <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    :root {
+      --accent-cyan: var(--accent-amber);
+      --glow-cyan: var(--glow-amber);
+      --border-hover: rgba(245, 158, 11, 0.3);
+    }
+    body {
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(239, 68, 68, 0.06) 0px, transparent 50%);
+    }
+    .metrics-raw-textarea {
+      background-color: #060913;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.825rem;
+      color: #fbbf24; /* Amber light */
+      height: 380px;
+      width: 100%;
+      resize: vertical;
+      line-height: 1.5;
+    }
+  </style>
 </head>
 <body>
 
@@ -12,48 +37,86 @@
     <div id="sidebar-container"></div>
 
     <div class="main-content">
-      <div class="card-header" style="margin-bottom: 0;">
+      <div class="flex-between">
         <div>
-          <h1>System Metrics Dashboard</h1>
-          <p class="subtitle">Real-time platform metrics scraped directly from Prometheus endpoint</p>
+          <h1>Platform telemetry</h1>
+          <p class="subtitle">System hardware metrics, database pools, and Prometheus scrapers</p>
         </div>
-        <button class="btn btn-primary" onclick="loadPrometheusMetrics()">🔄 Scrape Metrics</button>
+        <button class="btn btn-primary" onclick="loadSystemMetrics()" style="border-color: rgba(245, 158, 11, 0.3); color: var(--accent-amber);">
+          🔄 Force Scrape 
+        </button>
       </div>
 
-      <!-- Live metrics summary cards -->
-      <div class="grid-cols-2">
-        <!-- Raw Scraper View -->
-        <div class="card" style="display: flex; flex-direction: column;">
-          <div class="card-header">
-            <h3 class="card-title">📖 Prometheus Raw Output</h3>
+      <!-- Key hardware gauges -->
+      <div class="grid-cols-3">
+        <!-- Server Uptime -->
+        <div class="card">
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.05em;">SERVER UPTIME</span>
+            <span style="font-size: 1.25rem;">⏳</span>
           </div>
-          <pre id="raw-metrics-display" style="background-color: #060913; border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; font-family: 'Fira Code', monospace; font-size: 0.8rem; height: 350px; overflow-y: auto; color: var(--text-muted);">
-Loading raw prometheus metrics...
-          </pre>
+          <div class="stat-value" id="stats-uptime" style="font-size: 2.25rem;">Loading...</div>
+          <p class="stat-desc" id="stats-version" style="font-size: 0.75rem;">Version: -</p>
         </div>
 
-        <!-- Parsed Metrics list -->
+        <!-- DB Connection pool status -->
+        <div class="card">
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.05em;">DATABASE POOL</span>
+            <span style="font-size: 1.25rem;">🗄️</span>
+          </div>
+          <div class="stat-value" id="stats-db" style="font-size: 2.25rem; color: var(--accent-emerald);">Loading...</div>
+          <p class="stat-desc" id="stats-db-meta" style="font-size: 0.75rem;">Status: -</p>
+        </div>
+
+        <!-- Prometheus status -->
+        <div class="card">
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.05em;">PROMETHEUS STATUS</span>
+            <span style="font-size: 1.25rem;">📡</span>
+          </div>
+          <div class="stat-value" id="stats-prometheus" style="font-size: 2.25rem; color: var(--accent-cyan);">Healthy</div>
+          <p class="stat-desc" style="font-size: 0.75rem;">Scraping port: /metrics/prometheus</p>
+        </div>
+      </div>
+
+      <!-- Midsection chart and raw log view -->
+      <div class="grid-cols-2">
+        
+        <!-- Copy Pasteable Raw Prometheus View -->
+        <div class="card" style="display: flex; flex-direction: column;">
+          <div class="card-header" style="justify-content: space-between; align-items: center;">
+            <h3 class="card-title">📖 Prometheus Raw Output</h3>
+            <button class="btn btn-secondary" onclick="copyRawMetrics()" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
+              📋 Copy Raw Data
+            </button>
+          </div>
+          <textarea id="raw-metrics-display" class="metrics-raw-textarea" readonly>Loading raw metrics...</textarea>
+        </div>
+
+        <!-- Parsed Metrics table -->
         <div class="card" style="display: flex; flex-direction: column;">
           <div class="card-header">
             <h3 class="card-title">⚙️ Active Platform Counters</h3>
           </div>
           
-          <div class="table-container" style="max-height: 350px; overflow-y: auto;">
+          <div class="table-container" style="max-height: 380px; overflow-y: auto;">
             <table>
               <thead>
                 <tr>
-                  <th>Metric Name & Labels</th>
+                  <th>Metric Name</th>
                   <th style="text-align: right;">Value</th>
                 </tr>
               </thead>
               <tbody id="parsed-metrics-tbody">
                 <tr>
-                  <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">Parsing metrics...</td>
+                  <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">No counters active yet</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
+
       </div>
     </div>
   </div>
@@ -63,22 +126,58 @@ Loading raw prometheus metrics...
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       Auth.injectAdminNavigation('metrics');
-      loadPrometheusMetrics();
+      loadSystemMetrics();
     });
 
-    async function loadPrometheusMetrics() {
+    async function loadSystemMetrics() {
+      // 1. Load Health endpoint details
+      try {
+        const health = await fetch('/health').then(r => r.json());
+        document.getElementById('stats-uptime').textContent = formatUptime(health.uptime);
+        document.getElementById('stats-version').textContent = `Uptime: ${health.uptime} | Version: ${health.version || '1.0.0'}`;
+        
+        const isDbOk = health.database === 'connected' || health.status === 'ok';
+        document.getElementById('stats-db').textContent = isDbOk ? 'Connected' : 'Degraded';
+        document.getElementById('stats-db').style.color = isDbOk ? 'var(--accent-emerald)' : 'var(--accent-rose)';
+        document.getElementById('stats-db-meta').textContent = isDbOk ? 'PgPool status: Connected (Healthy)' : 'Database unreachable';
+      } catch (e) {
+        document.getElementById('stats-uptime').textContent = 'Error';
+        document.getElementById('stats-db').textContent = 'Offline';
+        document.getElementById('stats-db').style.color = 'var(--accent-rose)';
+      }
+
+      // 2. Load Raw Prometheus metrics
       try {
         const res = await fetch('/metrics/prometheus');
         const text = await res.text();
-
-        // Render Raw text
-        document.getElementById('raw-metrics-display').textContent = text;
-
-        // Parse and render in table
+        
+        document.getElementById('raw-metrics-display').value = text;
+        document.getElementById('stats-prometheus').textContent = 'Healthy';
+        document.getElementById('stats-prometheus').style.color = 'var(--accent-cyan)';
+        
         parseMetrics(text);
       } catch (err) {
-        Auth.showToast('Could not scrape prometheus: ' + err.message, 'error');
+        document.getElementById('stats-prometheus').textContent = 'Offline';
+        document.getElementById('stats-prometheus').style.color = 'var(--accent-rose)';
+        Auth.showToast('Could not scrape Prometheus metrics: ' + err.message, 'error');
       }
+    }
+
+    function formatUptime(uptimeStr) {
+      if (!uptimeStr) return 'Unknown';
+      // If it looks like a go duration format e.g. 2h34m12s
+      let hours = '';
+      let minutes = '';
+      
+      const hMatch = uptimeStr.match(/(\d+)h/);
+      const mMatch = uptimeStr.match(/(\d+)m/);
+      const sMatch = uptimeStr.match(/(\d+)s/);
+      
+      if (hMatch) hours = hMatch[1] + 'h ';
+      if (mMatch) minutes = mMatch[1] + 'm';
+      else if (sMatch) minutes = sMatch[1] + 's';
+      
+      return (hours + minutes) || uptimeStr;
     }
 
     function parseMetrics(rawText) {
@@ -89,17 +188,14 @@ Loading raw prometheus metrics...
       let count = 0;
 
       lines.forEach(line => {
-        // Skip comment lines and empty lines
         if (line.startsWith('#') || line.trim() === '') return;
 
-        // Separate name/labels and value
         const spaceIdx = line.lastIndexOf(' ');
         if (spaceIdx === -1) return;
 
         const metricStr = line.substring(0, spaceIdx);
         const value = line.substring(spaceIdx + 1);
 
-        // Beautify the label layout
         const tr = document.createElement('tr');
         
         let labelPart = '';
@@ -111,12 +207,18 @@ Loading raw prometheus metrics...
           labelPart = metricStr.substring(braceIdx);
         }
 
+        // Limit length of metrics shown in the table to key system telemetry for clean UX
+        if (namePart.startsWith('go_') || namePart.startsWith('promhttp_') || namePart.startsWith('process_')) {
+          // Filter out standard Go runtime metrics to keep it focused on Paykit domain specific metrics
+          return;
+        }
+
         tr.innerHTML = `
           <td>
             <strong style="color: var(--text-main); font-family: 'Fira Code', monospace; font-size: 0.85rem;">${namePart}</strong>
             ${labelPart ? `<div style="font-size: 0.75rem; color: var(--accent-cyan); font-family: 'Fira Code', monospace; margin-top: 0.25rem;">${labelPart}</div>` : ''}
           </td>
-          <td style="text-align: right; font-family: 'Fira Code', monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">${value}</td>
+          <td style="text-align: right; font-family: 'Fira Code', monospace; font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">${parseFloat(value).toLocaleString()}</td>
         `;
         tbody.appendChild(tr);
         count++;
@@ -125,10 +227,17 @@ Loading raw prometheus metrics...
       if (count === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">No metric counters active. Send some webhooks to initialize metrics.</td>
+            <td colspan="2" style="text-align: center; color: var(--text-muted); padding: 2rem;">No custom platform telemetry metrics recorded yet.</td>
           </tr>
         `;
       }
+    }
+
+    function copyRawMetrics() {
+      const el = document.getElementById('raw-metrics-display');
+      el.select();
+      document.execCommand('copy');
+      Auth.showToast('Copied raw Prometheus telemetry!');
     }
   </script>
 </body>

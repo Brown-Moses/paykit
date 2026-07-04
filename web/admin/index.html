@@ -3,8 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Overview — Operator Portal</title>
+  <title>Control Room — Operator Overview</title>
   <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    :root {
+      --accent-cyan: var(--accent-amber);
+      --glow-cyan: var(--glow-amber);
+      --border-hover: rgba(245, 158, 11, 0.3);
+    }
+    body {
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(239, 68, 68, 0.06) 0px, transparent 50%);
+    }
+    .badge-suspended {
+      background-color: rgba(244, 63, 94, 0.15);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+    }
+    /* Hover highlighting for merchant rows */
+    tbody tr td.merchant-name-cell {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    tbody tr td.merchant-name-cell:hover {
+      color: var(--accent-amber);
+      text-decoration: underline;
+    }
+    .status-alert-row {
+      background-color: rgba(244, 63, 94, 0.02) !important;
+    }
+    .status-alert-row:hover {
+      background-color: rgba(244, 63, 94, 0.04) !important;
+    }
+  </style>
 </head>
 <body>
 
@@ -12,62 +44,87 @@
     <div id="sidebar-container"></div>
 
     <div class="main-content">
-      <div>
-        <h1>All Merchants Overview</h1>
-        <p class="subtitle">Platform-wide merchant accounts and usage statistics</p>
+      <div class="flex-between">
+        <div>
+          <h1>Platform Operator Console</h1>
+          <p class="subtitle">Real-time supervision of tenant ingestion nodes and system health</p>
+        </div>
+        <button class="btn btn-secondary" onclick="loadMerchants()" style="border-color: rgba(245, 158, 11, 0.3); color: var(--accent-amber);">
+          🔄 Refresh Operations
+        </button>
       </div>
 
-      <!-- Stats summary -->
-      <div class="grid-cols-3">
+      <!-- Stats Grid -->
+      <div class="grid-cols-4">
+        <!-- Total tenants -->
         <div class="card">
-          <div class="card-header">
-            <span style="font-weight: 600; color: var(--text-muted);">TOTAL MERCHANTS</span>
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem;">TOTAL MERCHANTS</span>
             <span style="font-size: 1.25rem;">👥</span>
           </div>
           <div class="stat-value" id="stats-total-merchants">0</div>
         </div>
 
+        <!-- Active tenants -->
         <div class="card">
-          <div class="card-header">
-            <span style="font-weight: 600; color: var(--text-muted);">ACTIVE MERCHANTS</span>
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem;">ACTIVE TENANTS</span>
             <span style="font-size: 1.25rem;">🟢</span>
           </div>
           <div class="stat-value" id="stats-active-merchants" style="color: var(--accent-emerald);">0</div>
         </div>
 
+        <!-- Suspended tenants -->
+        <div class="card" id="card-suspended-count">
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem;">SUSPENDED</span>
+            <span style="font-size: 1.25rem;">🚫</span>
+          </div>
+          <div class="stat-value" id="stats-suspended-merchants">0</div>
+        </div>
+
+        <!-- Combined ingestion calls -->
         <div class="card">
-          <div class="card-header">
-            <span style="font-weight: 600; color: var(--text-muted);">TOTAL MONTHLY USAGE</span>
+          <div class="card-header" style="margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-muted); font-size: 0.8rem;">PLATFORM TRAFFIC</span>
             <span style="font-size: 1.25rem;">📊</span>
           </div>
-          <div class="stat-value" id="stats-total-calls">0</div>
+          <div class="stat-value" id="stats-total-calls" style="color: var(--accent-cyan);">0</div>
+        </div>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="card" style="padding: 1.25rem;">
+        <div style="display: flex; gap: 1rem; width: 100%;">
+          <input type="text" id="search-input" placeholder="Search by merchant name or API key..." oninput="handleSearch()" style="flex: 1;">
+          <select id="filter-status" onchange="handleSearch()" style="width: 220px; margin-bottom: 0;">
+            <option value="">All Tiers & Statuses</option>
+            <option value="active">Active Only</option>
+            <option value="suspended">Suspended Only</option>
+            <option value="overlimit">Over Limit (100% used)</option>
+            <option value="warning">Warning (80%+ used)</option>
+          </select>
         </div>
       </div>
 
       <!-- Merchants table list -->
       <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">👥 Merchant Accounts</h3>
-          <button class="btn btn-primary" onclick="loadMerchants()">🔄 Refresh Data</button>
-        </div>
-
         <div class="table-container">
           <table>
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Company Name</th>
-                <th>API Key (Hashed)</th>
-                <th>Webhook URL</th>
-                <th>Plan Type</th>
-                <th>Calls Usage</th>
+                <th>Merchant Tenant</th>
                 <th>Status</th>
-                <th>Created At</th>
+                <th>Tier</th>
+                <th>Quota Usage</th>
+                <th>Webhook Endpoint</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="merchants-tbody">
               <tr>
-                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading merchants list...</td>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem;">Loading merchant accounts...</td>
               </tr>
             </tbody>
           </table>
@@ -76,21 +133,85 @@
     </div>
   </div>
 
+  <!-- Plan Update Modal Dialog -->
+  <div class="modal-overlay" id="plan-modal-overlay">
+    <div class="modal" style="border-color: var(--accent-amber); box-shadow: 0 0 25px var(--glow-amber);">
+      <div class="modal-header">
+        <h3 class="card-title">⚙️ Adjust Ingestion Quota</h3>
+        <button class="btn btn-secondary" onclick="closeModal('plan-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+
+      <form id="plan-form" onsubmit="submitQuotaChange(event)" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <input type="hidden" id="modal-merchant-id">
+        
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="merchant-name-display">Merchant Tenant</label>
+          <input type="text" id="merchant-name-display" disabled style="background-color: var(--bg-main);">
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="plan-select">Service Plan Tier</label>
+          <select id="plan-select" onchange="suggestLimitForTier()" required>
+            <option value="free">FREE</option>
+            <option value="starter">STARTER</option>
+            <option value="growth">GROWTH</option>
+            <option value="enterprise">ENTERPRISE</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="max-calls-input">Max Monthly Webhook Ingest Limit</label>
+          <input type="number" id="max-calls-input" min="1" required>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('plan-modal-overlay')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Quota Configuration 💾</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toggle Suspension Confirmation Modal -->
+  <div class="modal-overlay" id="suspend-modal-overlay">
+    <div class="modal" style="border-color: var(--accent-rose); box-shadow: 0 0 25px var(--glow-rose);">
+      <div class="modal-header">
+        <h3 class="card-title" id="suspend-title">⚠️ Toggle Ingestion Access</h3>
+        <button class="btn btn-secondary" onclick="closeModal('suspend-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6;" id="suspend-body-text">
+        Are you sure you want to change the status of this merchant?
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('suspend-modal-overlay')">Cancel</button>
+        <button class="btn btn-danger" id="suspend-confirm-btn" onclick="confirmStatusToggle()">Apply Change</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/portal/api.js"></script>
   <script src="/portal/auth.js"></script>
   <script>
+    let allMerchants = [];
+    let activeFilter = '';
+    let searchQuery = '';
+    
+    let toggleTargetId = null;
+    let toggleTargetCurrentState = null;
+
     document.addEventListener('DOMContentLoaded', () => {
+      // Injects operator navigation items. The second parameter matches the active ID.
       Auth.injectAdminNavigation('overview');
       loadMerchants();
     });
 
     async function loadMerchants() {
       try {
-        const merchants = await API.adminListMerchants();
-        renderMerchants(merchants);
-        calculateStats(merchants);
+        allMerchants = await API.adminListMerchants();
+        renderMerchants(allMerchants);
+        calculateStats(allMerchants);
       } catch (err) {
-        Auth.showToast('Could not load merchants: ' + err.message, 'error');
+        Auth.showToast('Could not load operational logs: ' + err.message, 'error');
       }
     }
 
@@ -101,7 +222,7 @@
       if (!merchants || merchants.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">No merchants registered on this platform</td>
+            <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem;">No merchant accounts match the filters.</td>
           </tr>
         `;
         return;
@@ -109,28 +230,59 @@
 
       merchants.forEach(m => {
         const tr = document.createElement('tr');
-        const badgeClass = m.Active ? 'badge-success' : 'badge-danger';
-        const truncatedKey = m.APIKey.substring(0, 10) + '...';
         
-        // Calculate usage percentage
         const usagePercent = Math.min(Math.round((m.CurrentMonthCalls / m.MaxMonthlyCalls) * 100), 100);
         
+        // Highlights row if suspended
+        if (!m.Active) {
+          tr.className = 'status-alert-row';
+        }
+
+        // Quota color tags
+        let barClass = '';
+        let percentageColor = 'var(--text-main)';
+        if (usagePercent >= 100) {
+          barClass = 'danger';
+          percentageColor = 'var(--accent-rose)';
+        } else if (usagePercent >= 80) {
+          barClass = 'warning';
+          percentageColor = 'var(--accent-amber)';
+        }
+
         tr.innerHTML = `
           <td style="font-weight: 600;">#${m.ID}</td>
-          <td style="font-weight: 600; color: var(--text-main);">${m.Name}</td>
-          <td style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: var(--text-muted);">${truncatedKey}</td>
-          <td style="font-size: 0.85rem; word-break: break-all; max-width: 200px;">${m.WebhookURL || '<em style="color: var(--text-muted)">None</em>'}</td>
-          <td style="font-weight: 700; color: var(--accent-cyan); text-transform: uppercase;">${m.PlanType}</td>
+          <td class="merchant-name-cell" onclick="drillDownMerchant(${m.ID})" title="Inspect merchant detail drilldown">
+            <strong>${m.Name}</strong>
+          </td>
           <td>
-            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">
+            <span class="badge ${m.Active ? 'badge-success' : 'badge-suspended'}">
+              ${m.Active ? 'Active' : 'Suspended'}
+            </span>
+          </td>
+          <td style="text-transform: uppercase; font-weight: 700; color: var(--accent-cyan); font-size: 0.85rem;">
+            ${m.PlanType}
+          </td>
+          <td>
+            <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.35rem; color: ${percentageColor};">
               ${m.CurrentMonthCalls.toLocaleString()} / ${m.MaxMonthlyCalls.toLocaleString()} (${usagePercent}%)
             </div>
             <div class="quota-bar-bg" style="height: 6px;">
-              <div class="quota-bar-fill ${usagePercent >= 80 ? 'warning' : ''}" style="width: ${usagePercent}%;"></div>
+              <div class="quota-bar-fill ${barClass}" style="width: ${usagePercent}%;"></div>
             </div>
           </td>
-          <td><span class="badge ${badgeClass}">${m.Active ? 'Active' : 'Inactive'}</span></td>
-          <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(m.CreatedAt).toLocaleDateString()}</td>
+          <td style="font-family: 'Fira Code', monospace; font-size: 0.8rem; word-break: break-all; max-width: 250px;" title="${m.WebhookURL || 'No Webhook endpoint set'}">
+            ${m.WebhookURL || '<em style="color: var(--text-muted)">Unconfigured</em>'}
+          </td>
+          <td>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn btn-secondary" onclick="openPlanModal(${m.ID}, '${m.Name.replace(/'/g, "\\'")}', '${m.PlanType}', ${m.MaxMonthlyCalls})" style="padding: 0.35rem 0.65rem; font-size: 0.75rem;">
+                ⚙️ Adjust Limit
+              </button>
+              <button class="btn ${m.Active ? 'btn-danger' : 'btn-success'}" onclick="promptStatusToggle(${m.ID}, ${m.Active}, '${m.Name.replace(/'/g, "\\'")}')" style="padding: 0.35rem 0.65rem; font-size: 0.75rem; min-width: 100px;">
+                ${m.Active ? '🚫 Suspend' : '🟢 Activate'}
+              </button>
+            </div>
+          </td>
         `;
         tbody.appendChild(tr);
       });
@@ -142,8 +294,141 @@
       const activeCount = merchants.filter(m => m.Active).length;
       document.getElementById('stats-active-merchants').textContent = activeCount;
 
+      const suspendedCount = merchants.filter(m => !m.Active).length;
+      document.getElementById('stats-suspended-merchants').textContent = suspendedCount;
+      
+      const susCard = document.getElementById('card-suspended-count');
+      if (suspendedCount > 0) {
+        document.getElementById('stats-suspended-merchants').style.color = 'var(--accent-rose)';
+        susCard.style.borderColor = 'rgba(244, 63, 94, 0.3)';
+      } else {
+        document.getElementById('stats-suspended-merchants').style.color = 'var(--text-muted)';
+        susCard.style.borderColor = 'var(--border-color)';
+      }
+
       const totalCalls = merchants.reduce((sum, m) => sum + m.CurrentMonthCalls, 0);
       document.getElementById('stats-total-calls').textContent = totalCalls.toLocaleString();
+    }
+
+    function handleSearch() {
+      searchQuery = document.getElementById('search-input').value.toLowerCase().trim();
+      activeFilter = document.getElementById('filter-status').value;
+
+      const filtered = allMerchants.filter(m => {
+        const matchesSearch = m.Name.toLowerCase().includes(searchQuery) || m.APIKey.toLowerCase().includes(searchQuery);
+        
+        let matchesStatus = true;
+        const usagePercent = (m.CurrentMonthCalls / m.MaxMonthlyCalls) * 100;
+
+        if (activeFilter === 'active') {
+          matchesStatus = m.Active;
+        } else if (activeFilter === 'suspended') {
+          matchesStatus = !m.Active;
+        } else if (activeFilter === 'overlimit') {
+          matchesStatus = usagePercent >= 100;
+        } else if (activeFilter === 'warning') {
+          matchesStatus = usagePercent >= 80 && usagePercent < 100;
+        }
+
+        return matchesSearch && matchesStatus;
+      });
+
+      renderMerchants(filtered);
+    }
+
+    function openPlanModal(id, name, planType, limit) {
+      document.getElementById('modal-merchant-id').value = id;
+      document.getElementById('merchant-name-display').value = name;
+      document.getElementById('plan-select').value = planType.toLowerCase();
+      document.getElementById('max-calls-input').value = limit;
+      
+      openModal('plan-modal-overlay');
+    }
+
+    function suggestLimitForTier() {
+      const plan = document.getElementById('plan-select').value;
+      const input = document.getElementById('max-calls-input');
+      
+      if (plan === 'free') input.value = 1000;
+      else if (plan === 'starter') input.value = 25000;
+      else if (plan === 'growth') input.value = 100000;
+      else if (plan === 'enterprise') input.value = 1000000;
+    }
+
+    async function submitQuotaChange(e) {
+      e.preventDefault();
+      const id = document.getElementById('modal-merchant-id').value;
+      const planType = document.getElementById('plan-select').value;
+      const maxCalls = document.getElementById('max-calls-input').value;
+
+      try {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving Quota... 💾';
+
+        await API.adminUpdateQuota(id, planType, maxCalls);
+        Auth.showToast('Merchant quota limits saved!');
+        closeModal('plan-modal-overlay');
+        loadMerchants();
+      } catch (err) {
+        Auth.showToast('Quota update failed: ' + err.message, 'error');
+      } finally {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = false;
+        btn.textContent = 'Save Quota Configuration 💾';
+      }
+    }
+
+    function promptStatusToggle(id, active, name) {
+      toggleTargetId = id;
+      toggleTargetCurrentState = active;
+      
+      const title = document.getElementById('suspend-title');
+      const text = document.getElementById('suspend-body-text');
+      const btn = document.getElementById('suspend-confirm-btn');
+
+      if (active) {
+        title.innerHTML = '<span>🚫</span> Suspend Merchant Account?';
+        text.innerHTML = `You are about to suspend <strong>${name}</strong> (#${id}).<br><br>All incoming webhooks sent to their endpoint will be rejected immediately by the validation middleware.`;
+        btn.textContent = 'Suspend Tenant Account 🚫';
+        btn.className = 'btn btn-danger';
+      } else {
+        title.innerHTML = '<span>🟢</span> Activate Merchant Account?';
+        text.innerHTML = `You are activating <strong>${name}</strong> (#${id}).<br><br>Webhook ingestion and processing services will resume processing.`;
+        btn.textContent = 'Activate Tenant Account 🟢';
+        btn.className = 'btn btn-success';
+      }
+
+      openModal('suspend-modal-overlay');
+    }
+
+    async function confirmStatusToggle() {
+      closeModal('suspend-modal-overlay');
+      const btn = document.getElementById('suspend-confirm-btn');
+      btn.disabled = true;
+
+      try {
+        const targetState = !toggleTargetCurrentState;
+        await API.adminToggleMerchant(toggleTargetId, targetState);
+        Auth.showToast(`Merchant status changed successfully.`);
+        loadMerchants();
+      } catch (err) {
+        Auth.showToast('Could not modify tenant status: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function drillDownMerchant(id) {
+      window.location.href = `/operator/merchant.html?id=${id}`;
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
     }
   </script>
 </body>

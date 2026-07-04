@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inspect Tenant — Operator Console</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    :root {
+      --accent-cyan: var(--accent-amber);
+      --glow-cyan: var(--glow-amber);
+      --border-hover: rgba(245, 158, 11, 0.3);
+    }
+    body {
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(239, 68, 68, 0.06) 0px, transparent 50%);
+    }
+    .badge-suspended {
+      background-color: rgba(244, 63, 94, 0.15);
+      color: var(--accent-rose);
+      border: 1px solid rgba(244, 63, 94, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div>
+        <a href="/operator/index.html" style="color: var(--accent-amber); text-decoration: none; font-weight: 600; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+          &larr; Back to Control Room Overview
+        </a>
+        <h1 id="merchant-name-title">Loading Merchant Account...</h1>
+        <p class="subtitle">Detailed tenant credentials, quota monitoring, and service logs</p>
+      </div>
+
+      <!-- Merchant Details Grid -->
+      <div class="grid-cols-2">
+        
+        <!-- Core Details -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">⚙️ Tenant Identity & Configuration</h3>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem;">
+            <div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Merchant ID</span>
+              <strong id="detail-id" style="font-size: 1.1rem; color: var(--text-main);">-</strong>
+            </div>
+            <div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Status</span>
+              <div style="margin-top: 0.25rem;"><span class="badge" id="detail-status">-</span></div>
+            </div>
+            <div style="grid-column: span 2;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">API Key (Hashed Signature)</span>
+              <div id="detail-api-key" style="font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--text-muted); word-break: break-all; margin-top: 0.25rem;">-</div>
+            </div>
+            <div style="grid-column: span 2;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Webhook Endpoint URL</span>
+              <div id="detail-webhook-url" style="font-family: 'Fira Code', monospace; font-size: 0.85rem; color: var(--text-main); word-break: break-all; margin-top: 0.25rem;">-</div>
+            </div>
+            <div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Account Created</span>
+              <strong id="detail-created" style="font-size: 0.95rem; color: var(--text-main); font-weight: 500;">-</strong>
+            </div>
+            <div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Service Plan</span>
+              <strong id="detail-plan" style="font-size: 0.95rem; color: var(--accent-amber); text-transform: uppercase;">-</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quota Monitoring -->
+        <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div class="card-header">
+              <h3 class="card-title">📦 Call Usage Tracker</h3>
+            </div>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">
+              Usage limits reset automatically on the 1st of every month. Ingestion stops at 100% of limits.
+            </p>
+          </div>
+
+          <div class="quota-container" style="margin-top: 2rem;">
+            <div class="quota-meta">
+              <span>Calls Ingested</span>
+              <strong id="quota-ratio-text">0 / 0</strong>
+            </div>
+            <div class="quota-bar-bg" style="height: 10px;">
+              <div class="quota-bar-fill" id="quota-bar-fill"></div>
+            </div>
+            <div class="quota-meta" style="font-size: 0.75rem;">
+              <span id="quota-percent-text">0% Used</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Panel Card -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">🛠️ Account Administrative Adjustments</h3>
+        </div>
+        <div style="display: flex; gap: 2rem; margin-top: 1.5rem; flex-wrap: wrap;">
+          <!-- Adjust Quotas button -->
+          <div style="flex: 1; min-width: 250px;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+              Adjust subscriber tier or maximum monthly call cap.
+            </p>
+            <button class="btn btn-primary" onclick="openPlanModal()">
+              ⚙️ Modify Quota Limit
+            </button>
+          </div>
+
+          <!-- Suspend button -->
+          <div style="flex: 1; min-width: 250px;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
+              Toggle status. Suspended merchants will have all incoming MoMo webhooks rejected instantly.
+            </p>
+            <button class="btn btn-danger" id="action-suspend-btn" onclick="promptStatusToggle()">
+              🚫 Suspend Account
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Plan Update Modal Dialog -->
+  <div class="modal-overlay" id="plan-modal-overlay">
+    <div class="modal" style="border-color: var(--accent-amber); box-shadow: 0 0 25px var(--glow-amber);">
+      <div class="modal-header">
+        <h3 class="card-title">⚙️ Adjust Ingestion Quota</h3>
+        <button class="btn btn-secondary" onclick="closeModal('plan-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+
+      <form id="plan-form" onsubmit="submitQuotaChange(event)" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="plan-select">Service Plan Tier</label>
+          <select id="plan-select" onchange="suggestLimitForTier()" required>
+            <option value="free">FREE</option>
+            <option value="starter">STARTER</option>
+            <option value="growth">GROWTH</option>
+            <option value="enterprise">ENTERPRISE</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="max-calls-input">Max Monthly Webhook Ingest Limit</label>
+          <input type="number" id="max-calls-input" min="1" required>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('plan-modal-overlay')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Quota Configuration 💾</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toggle Suspension Confirmation Modal -->
+  <div class="modal-overlay" id="suspend-modal-overlay">
+    <div class="modal" style="border-color: var(--accent-rose); box-shadow: 0 0 25px var(--glow-rose);">
+      <div class="modal-header">
+        <h3 class="card-title" id="suspend-title">⚠️ Toggle Ingestion Access</h3>
+        <button class="btn btn-secondary" onclick="closeModal('suspend-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6;" id="suspend-body-text">
+        Are you sure you want to change the status of this merchant?
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('suspend-modal-overlay')">Cancel</button>
+        <button class="btn btn-danger" id="suspend-confirm-btn" onclick="confirmStatusToggle()">Apply Change</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/portal/api.js"></script>
+  <script src="/portal/auth.js"></script>
+  <script>
+    let merchantId = null;
+    let merchantObj = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Injects operator navigation items. The second parameter matches the active ID.
+      Auth.injectAdminNavigation('overview');
+      parseParamsAndLoad();
+    });
+
+    async function parseParamsAndLoad() {
+      const params = new URLSearchParams(window.location.search);
+      const idVal = params.get('id');
+      if (!idVal) {
+        alert('Invalid ID parameter');
+        window.location.href = '/operator/index.html';
+        return;
+      }
+      merchantId = parseInt(idVal, 10);
+      loadMerchantDetails();
+    }
+
+    async function loadMerchantDetails() {
+      try {
+        const merchants = await API.adminListMerchants();
+        merchantObj = merchants.find(m => m.ID === merchantId);
+
+        if (!merchantObj) {
+          alert('Merchant not found');
+          window.location.href = '/operator/index.html';
+          return;
+        }
+
+        renderDetails();
+      } catch (err) {
+        Auth.showToast('Could not load details: ' + err.message, 'error');
+      }
+    }
+
+    function renderDetails() {
+      document.getElementById('merchant-name-title').textContent = merchantObj.Name;
+      document.getElementById('detail-id').textContent = `#${merchantObj.ID}`;
+      
+      const statusBadge = document.getElementById('detail-status');
+      statusBadge.textContent = merchantObj.Active ? 'Active' : 'Suspended';
+      statusBadge.className = 'badge ' + (merchantObj.Active ? 'badge-success' : 'badge-suspended');
+
+      document.getElementById('detail-api-key').textContent = merchantObj.APIKey;
+      document.getElementById('detail-webhook-url').textContent = merchantObj.WebhookURL || 'Unconfigured';
+      document.getElementById('detail-created').textContent = new Date(merchantObj.CreatedAt).toLocaleString();
+      document.getElementById('detail-plan').textContent = merchantObj.PlanType;
+
+      // Quotas
+      document.getElementById('quota-ratio-text').textContent = `${merchantObj.CurrentMonthCalls.toLocaleString()} / ${merchantObj.MaxMonthlyCalls.toLocaleString()}`;
+      
+      const usagePercent = Math.min(Math.round((merchantObj.CurrentMonthCalls / merchantObj.MaxMonthlyCalls) * 100), 100);
+      document.getElementById('quota-percent-text').textContent = `${usagePercent}% Limit Consumed`;
+      
+      const bar = document.getElementById('quota-bar-fill');
+      bar.style.width = `${usagePercent}%`;
+      bar.className = 'quota-bar-fill'; // reset
+      if (usagePercent >= 100) {
+        bar.classList.add('danger');
+      } else if (usagePercent >= 80) {
+        bar.classList.add('warning');
+      }
+
+      // Sync Admin Action Suspend button
+      const susBtn = document.getElementById('action-suspend-btn');
+      if (merchantObj.Active) {
+        susBtn.textContent = '🚫 Suspend Tenant Account';
+        susBtn.className = 'btn btn-danger';
+      } else {
+        susBtn.textContent = '🟢 Activate Tenant Account';
+        susBtn.className = 'btn btn-success';
+      }
+    }
+
+    function openPlanModal() {
+      document.getElementById('plan-select').value = merchantObj.PlanType.toLowerCase();
+      document.getElementById('max-calls-input').value = merchantObj.MaxMonthlyCalls;
+      openModal('plan-modal-overlay');
+    }
+
+    function suggestLimitForTier() {
+      const plan = document.getElementById('plan-select').value;
+      const input = document.getElementById('max-calls-input');
+      
+      if (plan === 'free') input.value = 1000;
+      else if (plan === 'starter') input.value = 25000;
+      else if (plan === 'growth') input.value = 100000;
+      else if (plan === 'enterprise') input.value = 1000000;
+    }
+
+    async function submitQuotaChange(e) {
+      e.preventDefault();
+      const planType = document.getElementById('plan-select').value;
+      const maxCalls = document.getElementById('max-calls-input').value;
+
+      try {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving Quota...';
+
+        await API.adminUpdateQuota(merchantId, planType, maxCalls);
+        Auth.showToast('Quota updated successfully.');
+        closeModal('plan-modal-overlay');
+        loadMerchantDetails();
+      } catch (err) {
+        Auth.showToast('Quota update failed: ' + err.message, 'error');
+      } finally {
+        const btn = document.querySelector('#plan-form button[type="submit"]');
+        btn.disabled = false;
+        btn.textContent = 'Save Quota Configuration 💾';
+      }
+    }
+
+    function promptStatusToggle() {
+      const title = document.getElementById('suspend-title');
+      const text = document.getElementById('suspend-body-text');
+      const btn = document.getElementById('suspend-confirm-btn');
+
+      if (merchantObj.Active) {
+        title.innerHTML = '<span>🚫</span> Suspend Merchant Account?';
+        text.innerHTML = `You are about to suspend <strong>${merchantObj.Name}</strong> (#${merchantId}).<br><br>All incoming webhooks sent to their endpoint will be rejected immediately by the validation middleware.`;
+        btn.textContent = 'Suspend Tenant Account 🚫';
+        btn.className = 'btn btn-danger';
+      } else {
+        title.innerHTML = '<span>🟢</span> Activate Merchant Account?';
+        text.innerHTML = `You are activating <strong>${merchantObj.Name}</strong> (#${merchantId}).<br><br>Webhook ingestion and processing services will resume.`;
+        btn.textContent = 'Activate Tenant Account 🟢';
+        btn.className = 'btn btn-success';
+      }
+
+      openModal('suspend-modal-overlay');
+    }
+
+    async function confirmStatusToggle() {
+      closeModal('suspend-modal-overlay');
+      const btn = document.getElementById('suspend-confirm-btn');
+      btn.disabled = true;
+
+      try {
+        const targetState = !merchantObj.Active;
+        await API.adminToggleMerchant(merchantId, targetState);
+        Auth.showToast(`Merchant status changed successfully.`);
+        loadMerchantDetails();
+      } catch (err) {
+        Auth.showToast('Could not modify tenant status: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+  </script>
+</body>
+</html>

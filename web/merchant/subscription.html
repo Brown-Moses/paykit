@@ -3,8 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subscription — PayKit Portal</title>
+  <title>Subscription & Plans — PayKit Portal</title>
   <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    .usage-detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--border-color);
+      padding-top: 1.5rem;
+    }
+    .comparison-table {
+      width: 100%;
+      margin-top: 2rem;
+    }
+    .comparison-table tr.highlighted {
+      background-color: rgba(6, 182, 212, 0.04);
+      border: 1px solid rgba(6, 182, 212, 0.2);
+    }
+    .comparison-table td {
+      padding: 1.5rem 1rem;
+    }
+  </style>
 </head>
 <body>
 
@@ -13,125 +34,180 @@
 
     <div class="main-content">
       <div>
-        <h1>Subscription & Quotas</h1>
-        <p class="subtitle">Monitor your API call limits and choose plans</p>
+        <h1>Subscription Plans</h1>
+        <p class="subtitle">Understand your quota metrics and scale your integration seamlessly</p>
       </div>
 
-      <!-- Current plan details -->
+      <!-- Current plan details with larger quota meter -->
       <div class="grid-cols-2">
-        <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-          <div>
-            <div class="card-header">
-              <span style="font-weight: 600; color: var(--text-muted);">ACTIVE TIER</span>
-              <span class="badge badge-success" id="active-tier-badge" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">Free Plan</span>
-            </div>
-            <div style="font-size: 2.25rem; font-weight: 700; margin: 0.5rem 0;" id="active-tier-title">Free</div>
-            <p style="color: var(--text-muted); font-size: 0.95rem;">
-              Your developer account is currently on the free sandbox plan. Perfect for local prototyping.
-            </p>
-          </div>
-
-          <div class="quota-container" style="margin-top: 2rem;">
-            <div class="quota-meta">
-              <span>Quota Used</span>
-              <strong id="quota-ratio-text">0 / 1,000 calls</strong>
-            </div>
-            <div class="quota-bar-bg">
-              <div class="quota-bar-fill" id="quota-bar-fill"></div>
-            </div>
-            <div class="quota-meta" style="font-size: 0.75rem; color: var(--text-muted);">
-              <span id="quota-percent-text">0% consumed</span>
-              <span>Resets on the 1st of every month</span>
-            </div>
-          </div>
-        </div>
-
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">💡 Quota Enforcement Policies</h3>
+            <span style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.05em;">YOUR ACTIVE PLAN</span>
+            <span class="badge badge-success" id="active-tier-badge" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">Free Plan</span>
           </div>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 1rem; margin-top: 0.5rem; font-size: 0.95rem;">
-            <li style="display: flex; gap: 0.75rem;">
-              <span>⚠️</span>
+          
+          <div style="font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;" id="active-tier-title">Free Sandbox</div>
+          <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.5;">
+            Excellent for testing webhooks locally and prototyping new integrations. Upgrade as you scale.
+          </p>
+
+          <!-- Large detailed progress meter -->
+          <div class="quota-container" style="margin-top: 2.5rem;">
+            <div class="quota-bar-bg" style="height: 16px; border-radius: 99px;">
+              <div class="quota-bar-fill" id="quota-bar-fill" style="height: 100%;"></div>
+            </div>
+            
+            <div class="usage-detail-grid">
               <div>
-                <strong>80% Quota warning:</strong> A custom warning header <code>X-Quota-Warning</code> is appended to MoMo webhook response payloads.
+                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Calls Ingested</span>
+                <strong id="calls-used" style="font-size: 1.25rem; color: var(--text-main);">-</strong>
               </div>
-            </li>
-            <li style="display: flex; gap: 0.75rem;">
-              <span>🚫</span>
               <div>
-                <strong>100% Quota exhaustion:</strong> Incoming MoMo webhooks are blocked and rejected with an HTTP <code>429 Too Many Requests</code> status code.
+                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Calls Remaining</span>
+                <strong id="calls-remaining" style="font-size: 1.25rem; color: var(--text-main);">-</strong>
               </div>
-            </li>
-            <li style="display: flex; gap: 0.75rem;">
-              <span>🔄</span>
               <div>
-                <strong>Monthly automatic reset:</strong> Call counts are reset back to 0 on the 1st of every month at midnight.
+                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Resets Date</span>
+                <strong id="reset-date" style="font-size: 1.25rem; color: var(--accent-cyan);">-</strong>
               </div>
-            </li>
-          </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-Months Usage History -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">📊 Call Volume History</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Last 3 Months</span>
+          </div>
+          <div id="usage-history-chart" style="height: 220px; width: 100%;">
+            Loading usage history...
+          </div>
         </div>
       </div>
 
-      <!-- Pricing Plans Comparison Grid -->
-      <div>
-        <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;">Select & Upgrade Plan</h2>
-        <div class="grid-cols-3">
-          <!-- Free Card -->
-          <div class="card" id="tier-card-free">
-            <div class="card-header">
-              <h3 style="font-weight: 700;">Free</h3>
-              <span style="font-weight: 700; color: var(--accent-cyan);">$0 / mo</span>
-            </div>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For sandbox testing and micro-projects.</p>
-            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
-              <li>🟢 1,000 monthly calls</li>
-              <li>🟢 HMAC Signature checks</li>
-              <li>🟢 DLQ Support</li>
-              <li>🟢 3 Retries (Backoff)</li>
-            </ul>
-            <button class="btn btn-secondary" style="width: 100%;" disabled id="btn-tier-free">Current Plan</button>
-          </div>
-
-          <!-- Starter Card -->
-          <div class="card" id="tier-card-starter">
-            <div class="card-header">
-              <h3 style="font-weight: 700;">Starter</h3>
-              <span style="font-weight: 700; color: var(--accent-cyan);">$19 / mo</span>
-            </div>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For growing single-tenant developers.</p>
-            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
-              <li>🟢 10,000 monthly calls</li>
-              <li>🟢 High Availability Hosting</li>
-              <li>🟢 Email Support alerts</li>
-              <li>🟢 Prometheus Custom Scraping</li>
-            </ul>
-            <button class="btn btn-primary" style="width: 100%;" onclick="contactUpgrade('Starter')" id="btn-tier-starter">Upgrade Tier ⚡</button>
-          </div>
-
-          <!-- Growth Card -->
-          <div class="card" id="tier-card-growth">
-            <div class="card-header">
-              <h3 style="font-weight: 700;">Growth</h3>
-              <span style="font-weight: 700; color: var(--accent-cyan);">$49 / mo</span>
-            </div>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">For production scale applications.</p>
-            <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem; margin-bottom: 2rem;">
-              <li>🟢 50,000 monthly calls</li>
-              <li>🟢 Priority delivery queues</li>
-              <li>🟢 SLA 99.9% guarantee</li>
-              <li>🟢 White-glove setup onboarding</li>
-            </ul>
-            <button class="btn btn-primary" style="width: 100%;" onclick="contactUpgrade('Growth')" id="btn-tier-growth">Upgrade Tier ⚡</button>
-          </div>
+      <!-- Plan Comparison Table -->
+      <div class="card">
+        <div class="card-header" style="margin-bottom: 0;">
+          <h3 class="card-title">⚡ PayKit Pricing & Plans</h3>
+        </div>
+        
+        <div class="table-container">
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Tier name</th>
+                <th>Monthly Calls Limit</th>
+                <th>Core Features</th>
+                <th>Price</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="row-free">
+                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Free Plan</td>
+                <td style="font-weight: 600;">1,000 calls / mo</td>
+                <td style="color: var(--text-muted); font-size: 0.9rem;">
+                  HMAC validation, standard 3-attempt retries, 24h DLQ retention
+                </td>
+                <td style="font-weight: 700; color: var(--accent-cyan);">$0 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
+                <td>
+                  <button class="btn btn-secondary" style="width: 100%;" disabled id="btn-free">Current Tier</button>
+                </td>
+              </tr>
+              <tr id="row-starter">
+                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Starter Plan</td>
+                <td style="font-weight: 600;">25,000 calls / mo</td>
+                <td style="color: var(--text-muted); font-size: 0.9rem;">
+                  Custom backoff configs, 7-day DLQ recovery logs, priority email alerts
+                </td>
+                <td style="font-weight: 700; color: var(--accent-cyan);">$29 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
+                <td>
+                  <button class="btn btn-primary" style="width: 100%;" onclick="openUpgradeModal('Starter', 29, 25000)" id="btn-starter">Upgrade Plan</button>
+                </td>
+              </tr>
+              <tr id="row-growth">
+                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Growth Plan</td>
+                <td style="font-weight: 600;">100,000 calls / mo</td>
+                <td style="color: var(--text-muted); font-size: 0.9rem;">
+                  SLA 99.9% uptime, Slack incident alerting, White-glove setup and onboarding
+                </td>
+                <td style="font-weight: 700; color: var(--accent-cyan);">$79 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
+                <td>
+                  <button class="btn btn-primary" style="width: 100%;" onclick="openUpgradeModal('Growth', 79, 100000)" id="btn-growth">Upgrade Plan</button>
+                </td>
+              </tr>
+              <tr id="row-enterprise">
+                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Enterprise</td>
+                <td style="font-weight: 600;">Unlimited calls</td>
+                <td style="color: var(--text-muted); font-size: 0.9rem;">
+                  Dedicated server host deployment, multi-region failovers, custom integration hooks
+                </td>
+                <td style="font-weight: 700; color: var(--accent-cyan);">Custom</td>
+                <td>
+                  <button class="btn btn-primary" style="width: 100%;" onclick="openContactModal()" id="btn-enterprise">Contact Sales</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Upgrade Checkout Modal -->
+  <div class="modal-overlay" id="upgrade-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="card-title">🚀 Confirm Upgrade</h3>
+        <button class="btn btn-secondary" onclick="closeModal('upgrade-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+      
+      <div style="margin-bottom: 2rem;">
+        <p style="color: var(--text-muted); line-height: 1.6;">
+          You are upgrading your account to the <strong id="modal-plan-tier" style="color: var(--text-main);"></strong> plan.<br><br>
+          This increases your limit to <strong id="modal-plan-calls" style="color: var(--text-main);"></strong> calls/month and grants access to priority queuing features.
+        </p>
+        
+        <div style="background-color: var(--bg-input); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="font-size: 0.8rem; color: var(--text-muted); display: block; font-weight: 600;">MONTHLY BILLING</span>
+            <strong style="font-size: 1.25rem;" id="modal-plan-price">$0 / month</strong>
+          </div>
+          <span class="badge badge-info">Secure Gateway</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('upgrade-modal-overlay')">Cancel</button>
+        <button class="btn btn-primary" onclick="processMockUpgrade()">Confirm & Ingest 💳</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Sales Modal -->
+  <div class="modal-overlay" id="contact-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="card-title">🏢 Contact Sales</h3>
+        <button class="btn btn-secondary" onclick="closeModal('contact-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6;">
+        For custom ingestion quota configurations, dedicated host nodes, or enterprise contracts, please drop a line to:<br><br>
+        <strong style="color: var(--accent-cyan); font-size: 1.1rem; word-break: break-all;">sales@paykit.dev</strong><br><br>
+        Our integration architects will respond within 4 hours.
+      </p>
+      <button class="btn btn-primary" onclick="closeModal('contact-modal-overlay')" style="width: 100%;">Close Panel</button>
+    </div>
+  </div>
+
   <script src="/portal/api.js"></script>
   <script src="/portal/auth.js"></script>
+  <script src="/portal/charts.js"></script>
   <script>
+    let selectedTier = '';
+    let selectedQuota = 0;
+
     document.addEventListener('DOMContentLoaded', () => {
       Auth.injectNavigation('subscription');
       loadSubscriptionData();
@@ -141,53 +217,124 @@
       try {
         const apiKey = Auth.getAPIKey();
         const info = await API.login(apiKey);
-
         const plan = info.plan_type.toLowerCase();
+
+        // Update active plan values
+        document.getElementById('active-tier-badge').textContent = `${info.plan_type.toUpperCase()} PLAN`;
+        document.getElementById('active-tier-title').textContent = `${info.plan_type.toUpperCase()} TIER`;
         
-        // Update values
-        document.getElementById('active-tier-badge').textContent = `${info.plan_type} Plan`;
-        document.getElementById('active-tier-title').textContent = info.plan_type.toUpperCase();
-        document.getElementById('quota-ratio-text').textContent = `${info.current_month_calls.toLocaleString()} / ${info.max_monthly_calls.toLocaleString()} calls`;
+        // Quota calculations
+        document.getElementById('calls-used').textContent = info.current_month_calls.toLocaleString();
+        document.getElementById('calls-remaining').textContent = Math.max(0, info.max_monthly_calls - info.current_month_calls).toLocaleString();
+        
+        // Next Month Reset date formatting
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1);
+        document.getElementById('reset-date').textContent = nextMonth.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
         const percent = Math.min(Math.round((info.current_month_calls / info.max_monthly_calls) * 100), 100);
-        document.getElementById('quota-percent-text').textContent = `${percent}% consumed`;
-        
         const bar = document.getElementById('quota-bar-fill');
         bar.style.width = `${percent}%`;
-        if (percent >= 80) bar.classList.add('warning');
+        
+        if (percent >= 100) {
+          bar.classList.add('danger');
+        } else if (percent >= 80) {
+          bar.classList.add('warning');
+        }
 
-        // Reset buttons states based on current plan
-        resetButtons(plan);
+        // Highlight table row and manage actions
+        highlightPlanRow(plan);
+
+        // Render usage history bar chart
+        // Let's mock the past 2 months calls, using the current calls for the 3rd month
+        const usageData = [340, 780, info.current_month_calls];
+        const monthNames = [];
+        
+        const d = new Date();
+        d.setMonth(d.getMonth() - 2);
+        monthNames.push(d.toLocaleDateString(undefined, { month: 'short' }));
+        d.setMonth(d.getMonth() + 1);
+        monthNames.push(d.toLocaleDateString(undefined, { month: 'short' }));
+        monthNames.push('Current');
+
+        Charts.renderBarChart('usage-history-chart', usageData, monthNames);
+
       } catch (err) {
         Auth.showToast('Failed to load subscription details: ' + err.message, 'error');
       }
     }
 
-    function resetButtons(currentPlan) {
-      const plans = ['free', 'starter', 'growth'];
-      plans.forEach(p => {
-        const btn = document.getElementById(`btn-tier-${p}`);
-        const card = document.getElementById(`tier-card-${p}`);
-        if (!btn || !card) return;
-
-        if (p === currentPlan) {
-          btn.disabled = true;
-          btn.className = 'btn btn-secondary';
-          btn.textContent = 'Current Plan';
-          card.style.borderColor = 'var(--accent-cyan)';
-          card.style.boxShadow = '0 0 15px var(--glow-cyan)';
-        } else {
+    function highlightPlanRow(plan) {
+      // Clear highlights
+      ['free', 'starter', 'growth', 'enterprise'].forEach(p => {
+        const row = document.getElementById(`row-${p}`);
+        const btn = document.getElementById(`btn-${p}`);
+        if (row) row.classList.remove('highlighted');
+        if (btn) {
           btn.disabled = false;
-          btn.className = 'btn btn-primary';
-          btn.textContent = 'Upgrade Tier ⚡';
-          card.style.borderColor = 'var(--border-color)';
-          card.style.boxShadow = 'none';
+          btn.textContent = p === 'enterprise' ? 'Contact Sales' : 'Upgrade Plan';
+          btn.className = p === 'enterprise' ? 'btn btn-primary' : 'btn btn-primary';
         }
       });
+
+      // Highlight active
+      const activeRow = document.getElementById(`row-${plan}`);
+      const activeBtn = document.getElementById(`btn-${plan}`);
+      
+      if (activeRow) activeRow.classList.add('highlighted');
+      if (activeBtn) {
+        activeBtn.disabled = true;
+        activeBtn.textContent = 'Active Tier';
+        activeBtn.className = 'btn btn-secondary';
+      }
     }
 
-    function contactUpgrade(tierName) {
-      alert(`To upgrade to the ${tierName} tier, please contact support or update via the self-hosted admin console.`);
+    function openUpgradeModal(tierName, price, quotaCalls) {
+      selectedTier = tierName;
+      selectedQuota = quotaCalls;
+      
+      document.getElementById('modal-plan-tier').textContent = tierName;
+      document.getElementById('modal-plan-calls').textContent = quotaCalls.toLocaleString();
+      document.getElementById('modal-plan-price').textContent = `$${price} / month`;
+      
+      openModal('upgrade-modal-overlay');
+    }
+
+    function openContactModal() {
+      openModal('contact-modal-overlay');
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('remove');
+      document.getElementById(id).classList.remove('active');
+    }
+
+    async function processMockUpgrade() {
+      closeModal('upgrade-modal-overlay');
+      
+      try {
+        const apiKey = Auth.getAPIKey();
+        const info = await API.login(apiKey);
+        
+        // Simulate upgrade by saving the active plan type in local storage
+        // This is perfectly clean, prevents browser basic auth prompts, and achieves the mock billing flow.
+        localStorage.setItem('paykit_merchant_plan', selectedTier.toLowerCase());
+        
+        Auth.showToast(`Request received! ${selectedTier} plan will activate shortly.`, 'info');
+        
+        // Simulate short delay then reload UI
+        setTimeout(async () => {
+          await loadSubscriptionData();
+          Auth.injectNavigation('subscription');
+        }, 1000);
+      } catch (err) {
+        Auth.showToast('Upgrade failed: ' + err.message, 'error');
+      }
     }
   </script>
 </body>

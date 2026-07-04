@@ -29,6 +29,7 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 	}
 
 	// Static UI assets routing
+	r.StaticFile("/", "./web/landing.html")
 	r.Static("/portal", "./web/merchant")
 
 	operatorPortal := r.Group("/operator", gin.BasicAuth(gin.Accounts{

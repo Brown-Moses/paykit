@@ -3,8 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DLQ Deliveries — PayKit Portal</title>
+  <title>Dead Letter Queue — PayKit Portal</title>
   <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    .summary-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    .summary-card.active-issues {
+      background: linear-gradient(135deg, rgba(244, 63, 94, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%);
+      border-color: rgba(244, 63, 94, 0.2);
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: var(--text-main);
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .celebrate-checkmark {
+      font-size: 5rem;
+      color: var(--accent-emerald);
+      filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.4));
+      margin-bottom: 1.5rem;
+      animation: bounceIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes bounceIn {
+      0% { transform: scale(0.3); opacity: 0; }
+      50% { transform: scale(1.05); }
+      70% { transform: scale(0.9); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
 </head>
 <body>
 
@@ -13,30 +48,46 @@
 
     <div class="main-content">
       <div>
-        <h1>Dead Letter Queue (DLQ)</h1>
-        <p class="subtitle">Inspect and re-trigger permanently failed webhook notifications</p>
+        <h1>Dead Letter Queue</h1>
+        <p class="subtitle">Inspect and retry permanently failed merchant webhooks</p>
+      </div>
+
+      <!-- Summary Attention Card -->
+      <div class="card summary-card" id="summary-panel">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <h2 id="summary-title" style="font-size: 1.75rem; margin-bottom: 0.25rem;">Checking deliveries...</h2>
+            <p id="summary-desc" style="color: var(--text-muted); font-size: 0.95rem;">Scanning webhook ingestion queue logs...</p>
+          </div>
+          <div id="summary-icon" style="font-size: 2.5rem;">📥</div>
+        </div>
+      </div>
+
+      <!-- Search / Filter Results Banner -->
+      <div id="search-filter-banner" class="banner banner-warning" style="display: none; justify-content: space-between; align-items: center;">
+        <span>🔍 Showing DLQ logs filtered for transaction.</span>
+        <button class="btn btn-secondary" onclick="clearSearchFilter()" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">Clear Filter</button>
       </div>
 
       <!-- DLQ List Panel -->
-      <div class="card">
+      <div class="card" id="dlq-table-card">
         <div class="table-container">
           <table>
             <thead>
               <tr>
                 <th>DLQ ID</th>
                 <th>TX ID</th>
-                <th>Destination URL</th>
+                <th>Destination Webhook URL</th>
                 <th>Attempts</th>
-                <th>Response</th>
                 <th>Last Error</th>
+                <th>Last Tried</th>
                 <th>Status</th>
-                <th>Failed At</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="dlq-tbody">
               <tr>
-                <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading DLQ records...</td>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem;">Loading DLQ records...</td>
               </tr>
             </tbody>
           </table>
@@ -49,6 +100,37 @@
           <button class="btn btn-secondary" id="btn-next" onclick="changePage(1)" disabled>Next &rarr;</button>
         </div>
       </div>
+
+      <!-- Satisfying empty state container -->
+      <div class="card text-center" id="dlq-empty-state" style="display: none; padding: 5rem 2rem;">
+        <div class="celebrate-checkmark">✓</div>
+        <h2 style="font-size: 2.25rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--accent-emerald);">All Deliveries Successful</h2>
+        <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 2.5rem; line-height: 1.6;">
+          Your webhook ingestion pipeline is completely clear. No failed requests require manual retry.
+        </p>
+        <button class="btn btn-primary" onclick="loadDLQ()" style="gap: 0.5rem;">
+          <span>🔄</span> Refresh Queue Status
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DLQ Retry Confirmation Modal -->
+  <div class="modal-overlay" id="retry-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="card-title"><span>📥</span> Retry Webhook Delivery?</h3>
+        <button class="btn btn-secondary" onclick="closeModal()" style="padding: 0.4rem 0.6rem;">✕</button>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6;">
+        Retry delivery for transaction <strong id="modal-tx-label" style="color: var(--text-main);"></strong> to:<br>
+        <strong id="modal-webhook-url" style="color: var(--accent-cyan); word-break: break-all;"></strong><br><br>
+        This will attempt immediate redelivery of the payment payload.
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmRetry()">Confirm Retry 🔄</button>
+      </div>
     </div>
   </div>
 
@@ -57,19 +139,80 @@
   <script>
     let currentPage = 1;
     const limitPerPage = 15;
+    let selectedDLQId = null;
+    let selectedTxLabel = '';
+    let selectedWebhookUrl = '';
+    let filterTxId = null; // Filtered database transaction id
 
     document.addEventListener('DOMContentLoaded', () => {
       Auth.injectNavigation('dlq');
-      loadDLQ();
+      checkUrlParamsAndLoad();
     });
+
+    async function checkUrlParamsAndLoad() {
+      const params = new URLSearchParams(window.location.search);
+      const searchVal = params.get('search');
+      
+      if (searchVal) {
+        document.getElementById('search-filter-banner').style.display = 'flex';
+        try {
+          // Look up transaction database ID from MTN provider ID
+          const tx = await API.getTransaction(searchVal);
+          filterTxId = tx.id;
+        } catch (err) {
+          Auth.showToast('Could not locate transaction filter ID: ' + err.message, 'error');
+        }
+      }
+      loadDLQ();
+    }
 
     async function loadDLQ() {
       try {
         const res = await API.getDLQ({ page: currentPage, limit: limitPerPage });
-        renderDLQ(res.data);
-        updatePagination(res.page, res.count);
+        
+        // Filter list if filterTxId is set
+        let dlqItems = res.data;
+        if (filterTxId) {
+          dlqItems = res.data.filter(item => item.TransactionID === filterTxId);
+        }
+
+        const unresolvedCount = res.data.filter(item => item.Status !== 'RESOLVED').length;
+        
+        updateSummaryCard(unresolvedCount);
+
+        if (res.data.length === 0) {
+          document.getElementById('dlq-table-card').style.display = 'none';
+          document.getElementById('summary-panel').style.display = 'none';
+          document.getElementById('dlq-empty-state').style.display = 'block';
+        } else {
+          document.getElementById('dlq-empty-state').style.display = 'none';
+          document.getElementById('dlq-table-card').style.display = 'block';
+          document.getElementById('summary-panel').style.display = 'block';
+          renderDLQ(dlqItems);
+          updatePagination(res.page, res.count);
+        }
+
       } catch (err) {
-        Auth.showToast('Could not load DLQ records: ' + err.message, 'error');
+        Auth.showToast('Could not load DLQ: ' + err.message, 'error');
+      }
+    }
+
+    function updateSummaryCard(count) {
+      const panel = document.getElementById('summary-panel');
+      const title = document.getElementById('summary-title');
+      const desc = document.getElementById('summary-desc');
+      const icon = document.getElementById('summary-icon');
+
+      if (count > 0) {
+        panel.className = 'card summary-card active-issues';
+        title.textContent = `${count} deliveries need attention`;
+        desc.textContent = 'Permanently failed merchant webhooks awaiting manual recovery retry.';
+        icon.textContent = '🚨';
+      } else {
+        panel.className = 'card summary-card';
+        title.textContent = 'All clear';
+        desc.textContent = 'All payment webhook notifications successfully received by your endpoints.';
+        icon.textContent = '🟢';
       }
     }
 
@@ -80,7 +223,7 @@
       if (!items || items.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 2rem;">No failed webhook deliveries in DLQ</td>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem;">No matching DLQ records found</td>
           </tr>
         `;
         return;
@@ -88,25 +231,29 @@
 
       items.forEach(item => {
         const tr = document.createElement('tr');
+        tr.id = `dlq-row-${item.ID}`;
+        
         const badgeClass = item.Status === 'RESOLVED' ? 'badge-success' : (item.Status === 'PENDING' || item.Status === 'REQUEUED' ? 'badge-warning' : 'badge-danger');
+        const isActionable = item.Status !== 'RESOLVED' && item.Status !== 'REQUEUED';
         
-        const isActionable = item.Status !== 'RESOLVED';
-        
+        // Status displays with spinner if requeued
+        let statusHtml = `<span class="badge ${badgeClass}">${item.Status}</span>`;
+        if (item.Status === 'REQUEUED') {
+          statusHtml = `<div class="flex-gap"><div class="spinner"></div><span class="badge ${badgeClass}">${item.Status}</span></div>`;
+        }
+
         tr.innerHTML = `
           <td style="font-weight: 600;">#${item.ID}</td>
-          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-size: 0.85rem;">tx_id:${item.TransactionID}</td>
-          <td style="font-size: 0.85rem; word-break: break-all; max-width: 200px;">${item.WebhookURL}</td>
+          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-size: 0.85rem;">TX-${item.TransactionID}</td>
+          <td style="font-size: 0.85rem; word-break: break-all; max-width: 250px;">${item.WebhookURL}</td>
           <td style="text-align: center; font-weight: 600;">${item.AttemptCount}</td>
-          <td style="font-weight: 700; color: ${item.LastResponseCode >= 200 && item.LastResponseCode < 300 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
-            ${item.LastResponseCode || 'N/A'}
-          </td>
           <td style="font-family: 'Fira Code', monospace; font-size: 0.75rem; color: var(--accent-rose); max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.LastError || ''}">
             ${item.LastError || 'None'}
           </td>
-          <td><span class="badge ${badgeClass}">${item.Status}</span></td>
-          <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(item.CreatedAt).toLocaleString()}</td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">${new Date(item.CreatedAt).toLocaleTimeString()}</td>
+          <td class="status-cell">${statusHtml}</td>
           <td>
-            <button class="btn btn-primary" onclick="triggerRetry(${item.ID})" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" ${isActionable ? '' : 'disabled'}>
+            <button class="btn btn-primary" onclick="promptRetry(${item.ID}, 'TX-${item.TransactionID}', '${item.WebhookURL}')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" ${isActionable ? '' : 'disabled'}>
               🔄 Retry
             </button>
           </td>
@@ -127,14 +274,74 @@
       loadDLQ();
     }
 
-    async function triggerRetry(id) {
-      try {
-        const res = await API.retryDLQ(id);
-        Auth.showToast('Retry triggered successfully!');
-        loadDLQ();
-      } catch (err) {
-        Auth.showToast('Retry failed: ' + err.message, 'error');
+    function promptRetry(id, txLabel, url) {
+      selectedDLQId = id;
+      selectedTxLabel = txLabel;
+      selectedWebhookUrl = url;
+      
+      document.getElementById('modal-tx-label').textContent = txLabel;
+      document.getElementById('modal-webhook-url').textContent = url;
+      
+      document.getElementById('retry-modal-overlay').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('retry-modal-overlay').classList.remove('active');
+    }
+
+    async function confirmRetry() {
+      closeModal();
+      
+      const row = document.getElementById(`dlq-row-${selectedDLQId}`);
+      if (row) {
+        // UI updates row immediately to REQUEUED with spinner
+        row.querySelector('.status-cell').innerHTML = `<div class="flex-gap"><div class="spinner"></div><span class="badge badge-warning">REQUEUED</span></div>`;
+        row.querySelector('button').disabled = true;
       }
+
+      try {
+        await API.retryDLQ(selectedDLQId);
+        Auth.showToast(`Retry dispatched for ${selectedTxLabel}!`);
+        
+        // Start polling check for resolution status updates
+        pollDLQStatus(selectedDLQId);
+      } catch (err) {
+        Auth.showToast('Retry launch failed: ' + err.message, 'error');
+        loadDLQ(); // Reset table on error
+      }
+    }
+
+    function pollDLQStatus(id) {
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        try {
+          const res = await API.getDLQ({ page: 1, limit: 100 });
+          const item = res.data.find(d => d.ID === id);
+          
+          if (item && item.Status === 'RESOLVED') {
+            clearInterval(interval);
+            Auth.showToast(`Delivery for TX-${item.TransactionID} has been RESOLVED successfully!`);
+            loadDLQ(); // Reload all stats
+          } else if (attempts >= 4) { // Timeout after 8 seconds of polling
+            clearInterval(interval);
+            Auth.showToast('Retry attempt complete. Check item status details.', 'info');
+            loadDLQ();
+          }
+        } catch (e) {
+          clearInterval(interval);
+          loadDLQ();
+        }
+      }, 2000);
+    }
+
+    function clearSearchFilter() {
+      filterTxId = null;
+      document.getElementById('search-filter-banner').style.display = 'none';
+      
+      // Clean query parameter from URL
+      window.history.pushState({}, document.title, window.location.pathname);
+      loadDLQ();
     }
   </script>
 </body>

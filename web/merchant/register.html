@@ -5,89 +5,205 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Register — PayKit Portal</title>
   <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    .register-body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: radial-gradient(circle at center, #0f172a 0%, #030712 100%);
+      padding: 1.5rem;
+    }
+    .register-card {
+      width: 480px;
+      max-width: 100%;
+      animation: fadeIn 0.5s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Full-screen reveal modal override */
+    .vault-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #030712;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 2rem;
+    }
+    .vault-overlay.active {
+      display: flex;
+    }
+    .vault-modal {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      width: 600px;
+      max-width: 100%;
+      padding: 3rem;
+      text-align: center;
+      box-shadow: 0 0 50px rgba(6, 182, 212, 0.15);
+      animation: zoomIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes zoomIn {
+      from { transform: scale(0.9) translateY(20px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+    .vault-key-container {
+      background: #05070f;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 1.5rem;
+      border-radius: 16px;
+      margin: 2rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.05);
+    }
+    .vault-key {
+      font-family: 'Fira Code', monospace;
+      font-size: 1.25rem;
+      color: var(--accent-cyan);
+      word-break: break-all;
+      letter-spacing: 0.05em;
+    }
+    .warning-box {
+      background: rgba(245, 158, 11, 0.05);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 2rem;
+      text-align: left;
+      font-size: 0.9rem;
+      color: var(--accent-amber);
+    }
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      justify-content: center;
+      margin-bottom: 2rem;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+    .checkbox-container input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent-cyan);
+      cursor: pointer;
+    }
+  </style>
 </head>
-<body class="login-container">
+<body class="register-body">
 
-  <div class="card login-card" id="register-card">
-    <div class="card-header" style="justify-content: center; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
+  <div class="card register-card" id="register-container">
+    <div class="card-header" style="justify-content: center; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem; text-align: center;">
       <div class="brand" style="margin-bottom: 0;">
         <div class="brand-dot"></div>
         PayKit Engine
       </div>
-      <p class="subtitle">Create Your Merchant Account</p>
+      <p class="subtitle">Create Your Developer Account</p>
     </div>
 
     <form id="register-form" onsubmit="handleRegister(event)">
       <div class="form-group">
-        <label for="name">Company / Merchant Name</label>
-        <input type="text" id="name" placeholder="e.g. Kigali Deliveries Ltd" required>
+        <label for="fullName">Full Name</label>
+        <input type="text" id="fullName" placeholder="e.g. John Doe" required>
       </div>
 
       <div class="form-group">
-        <label for="webhook-url">Webhook URL (Optional)</label>
-        <input type="text" id="webhook-url" placeholder="https://api.yourdomain.com/webhooks/momo">
+        <label for="businessName">Business / Company Name</label>
+        <input type="text" id="businessName" placeholder="e.g. Kigali Deliveries Ltd" required>
       </div>
 
-      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-        Register Merchant 🚀
+      <div class="form-group">
+        <label for="webhookUrl">Webhook Ingestion URL</label>
+        <input type="text" id="webhookUrl" placeholder="https://api.yourdomain.com/webhooks/momo">
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem; font-size: 1rem;">
+        Generate Vault Key 🔑
       </button>
     </form>
 
-    <div style="margin-top: 2rem; text-align: center; font-size: 0.875rem; color: var(--text-muted);">
-      Already have an account? <a href="/portal/index.html" style="color: var(--accent-cyan); text-decoration: none; font-weight: 600;">Sign In Here &rarr;</a>
+    <div style="margin-top: 2rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
+      Already have a key? <a href="/portal/index.html" style="color: var(--accent-cyan); text-decoration: none; font-weight: 600;">Sign In &rarr;</a>
     </div>
   </div>
 
-  <!-- Success Key Display -->
-  <div class="card login-card" id="success-card" style="display: none;">
-    <div class="card-header" style="justify-content: center; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; text-align: center;">
-      <div style="font-size: 3rem;">🎉</div>
-      <h2 style="font-weight: 700;">Account Created!</h2>
-      <p class="subtitle">Here is your live API key. Save it now, it will not be shown again.</p>
-    </div>
+  <!-- Full-Screen API Key Reveal Modal -->
+  <div class="vault-overlay" id="vault-modal-overlay">
+    <div class="vault-modal">
+      <div style="font-size: 3.5rem; margin-bottom: 1rem; filter: drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));">🗝️</div>
+      <h2 style="font-size: 2rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, #fff 0%, #9ca3af 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Your Vault Key Is Ready</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem;">This key grants full administrative access to your PayKit merchant portal.</p>
 
-    <div class="form-group">
-      <label>Your Live API Key</label>
-      <div class="code-box">
-        <span class="code-text" id="key-display">pk_live_xxxx</span>
-        <button class="btn btn-secondary" onclick="copyAPIKey()" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;">
-          📋 Copy
+      <div class="vault-key-container">
+        <span class="vault-key" id="key-display">pk_live_xxxxxxxxxxxxxxxxxxxxxxxx</span>
+        <button class="btn btn-secondary" onclick="copyAPIKey()" style="padding: 0.6rem 1rem; font-size: 0.85rem; flex-shrink: 0; gap: 0.4rem;">
+          <span>📋</span> Copy
         </button>
       </div>
-    </div>
 
-    <button class="btn btn-primary" onclick="redirectToLogin()" style="width: 100%; margin-top: 1.5rem;">
-      Proceed to Log In ⚡
-    </button>
+      <div class="warning-box">
+        <strong>⚠️ CRITICAL SECURITY WARNING:</strong>
+        <p style="margin-top: 0.5rem; line-height: 1.4;">
+          This key is only displayed <strong>once</strong>. If lost, it cannot be recovered, and all associated integrations will fail immediately. Store it securely in a password manager.
+        </p>
+      </div>
+
+      <label class="checkbox-container">
+        <input type="checkbox" id="key-confirm" onchange="toggleContinueBtn()">
+        <span>I have copied and securely saved my API key</span>
+      </label>
+
+      <button class="btn btn-primary" id="continue-btn" onclick="enterDashboard()" style="width: 100%; font-size: 1.1rem; padding: 1rem 2rem;" disabled>
+        Proceed to Dashboard 🚀
+      </button>
+    </div>
   </div>
 
   <script src="/portal/api.js"></script>
   <script src="/portal/auth.js"></script>
   <script>
     let generatedKey = '';
+    let merchantName = '';
 
     async function handleRegister(e) {
       e.preventDefault();
-      const name = document.getElementById('name').value.trim();
-      const webhookUrl = document.getElementById('webhook-url').value.trim();
+      const businessName = document.getElementById('businessName').value.trim();
+      const webhookUrl = document.getElementById('webhookUrl').value.trim();
 
       try {
         const btn = document.querySelector('button[type="submit"]');
         btn.disabled = true;
-        btn.textContent = 'Registering...';
+        btn.textContent = 'Generating Secure Key... 🔒';
 
-        const res = await API.register(name, webhookUrl);
+        const res = await API.register(businessName, webhookUrl);
         generatedKey = res.api_key;
+        merchantName = res.name;
         
         document.getElementById('key-display').textContent = generatedKey;
-        document.getElementById('register-card').style.display = 'none';
-        document.getElementById('success-card').style.display = 'block';
-        Auth.showToast('Registration successful!');
+        
+        // Show Vault Key Reveal Modal
+        document.getElementById('vault-modal-overlay').classList.add('active');
+        Auth.showToast('Secure Vault Key Generated!');
       } catch (err) {
-        Auth.showToast(err.message || 'Could not complete registration', 'error');
+        Auth.showToast(err.message || 'Could not generate account key', 'error');
         const btn = document.querySelector('button[type="submit"]');
         btn.disabled = false;
-        btn.textContent = 'Register Merchant 🚀';
+        btn.textContent = 'Generate Vault Key 🔑';
       }
     }
 
@@ -96,8 +212,22 @@
       Auth.showToast('API Key copied to clipboard!');
     }
 
-    function redirectToLogin() {
-      window.location.href = '/portal/index.html';
+    function toggleContinueBtn() {
+      const checkbox = document.getElementById('key-confirm');
+      const btn = document.getElementById('continue-btn');
+      btn.disabled = !checkbox.checked;
+    }
+
+    function enterDashboard() {
+      // Direct sign in
+      localStorage.setItem('paykit_api_key', generatedKey);
+      localStorage.setItem('paykit_merchant_name', merchantName);
+      localStorage.setItem('paykit_merchant_plan', 'free');
+      
+      Auth.showToast('Access Granted. Entering Portal...');
+      setTimeout(() => {
+        window.location.href = '/portal/dashboard.html';
+      }, 800);
     }
   </script>
 </body>

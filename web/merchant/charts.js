@@ -127,5 +127,111 @@ const Charts = {
     });
 
     container.appendChild(svg);
+  },
+
+  // Renders a sleek bar chart using SVG
+  renderBarChart(containerId, dataPoints, labels) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (!dataPoints || dataPoints.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">No usage metrics available</div>';
+      return;
+    }
+
+    const width = container.clientWidth || 500;
+    const height = 220;
+    const padding = 35;
+    const barWidth = Math.max(30, (width - padding * 2) / (dataPoints.length * 2));
+
+    const maxVal = Math.max(...dataPoints, 100);
+    const minVal = 0;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.style.overflow = 'visible';
+
+    // Gradients
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="bar-gradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-violet)" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="var(--accent-cyan)" stop-opacity="0.3"/>
+        </linearGradient>
+      </defs>
+    `;
+
+    // Draw Grid Lines (horizontal)
+    const gridCount = 3;
+    for (let i = 0; i <= gridCount; i++) {
+      const y = padding + (i / gridCount) * (height - padding * 2);
+      const value = Math.round(maxVal - (i / gridCount) * (maxVal - minVal));
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', padding);
+      line.setAttribute('y1', y);
+      line.setAttribute('x2', width - padding);
+      line.setAttribute('y2', y);
+      line.setAttribute('stroke', 'var(--border-color)');
+      line.setAttribute('stroke-dasharray', '4 4');
+      line.setAttribute('stroke-width', '0.5');
+      svg.appendChild(line);
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', padding - 8);
+      text.setAttribute('y', y + 4);
+      text.setAttribute('fill', 'var(--text-muted)');
+      text.setAttribute('font-size', '10');
+      text.setAttribute('text-anchor', 'end');
+      text.textContent = value.toLocaleString();
+      svg.appendChild(text);
+    }
+
+    // Draw bars
+    dataPoints.forEach((val, idx) => {
+      const x = padding + (idx / dataPoints.length) * (width - padding * 2) + barWidth / 2;
+      const barHeight = ((val - minVal) / (maxVal - minVal)) * (height - padding * 2);
+      const y = height - padding - barHeight;
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', x);
+      rect.setAttribute('y', y);
+      rect.setAttribute('width', barWidth);
+      rect.setAttribute('height', Math.max(2, barHeight));
+      rect.setAttribute('fill', 'url(#bar-gradient)');
+      rect.setAttribute('rx', '4'); // rounded corners
+      
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = `${labels[idx]}: ${val.toLocaleString()} calls`;
+      rect.appendChild(title);
+      svg.appendChild(rect);
+
+      // Label under bar
+      const xText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      xText.setAttribute('x', x + barWidth / 2);
+      xText.setAttribute('y', height - 10);
+      xText.setAttribute('fill', 'var(--text-muted)');
+      xText.setAttribute('font-size', '10');
+      xText.setAttribute('text-anchor', 'middle');
+      xText.textContent = labels[idx];
+      svg.appendChild(xText);
+
+      // Value above bar
+      const valText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      valText.setAttribute('x', x + barWidth / 2);
+      valText.setAttribute('y', y - 6);
+      valText.setAttribute('fill', 'var(--text-main)');
+      valText.setAttribute('font-size', '10');
+      valText.setAttribute('font-weight', '600');
+      valText.setAttribute('text-anchor', 'middle');
+      valText.textContent = val.toLocaleString();
+      svg.appendChild(valText);
+    });
+
+    container.appendChild(svg);
   }
 };
