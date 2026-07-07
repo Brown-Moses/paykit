@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -28,6 +29,26 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 		adminPassword = "admin" // secure default/fallback
 	}
 
+	// DB Status check middleware for UI page requests
+	r.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		// Only check database health for main portal pages and operator dashboard UI requests
+		isUI := path == "/" || 
+			(len(path) >= 7 && path[:7] == "/portal") || 
+			(len(path) >= 9 && path[:9] == "/operator")
+
+		if isUI {
+			if err := store.Ping(); err != nil {
+				c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+				c.Status(http.StatusServiceUnavailable)
+				c.File("./web/503.html")
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	})
+
 	// Static UI assets routing
 	r.StaticFile("/", "./web/landing.html")
 	r.Static("/portal", "./web/merchant")
@@ -36,6 +57,12 @@ func NewRouter(verifier *auth.Verifier, store *storage.Store, startTime time.Tim
 		"admin": adminPassword,
 	}))
 	operatorPortal.Static("", "./web/admin")
+
+	// Global 404 Page Router
+	r.NoRoute(func(c *gin.Context) {
+		c.Status(http.StatusNotFound)
+		c.File("./web/404.html")
+	})
 
 	// System
 	r.GET("/health", webHook.Health)

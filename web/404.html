@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 — Page Not Found</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    .error-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+      text-align: center;
+    }
+    .error-code {
+      font-size: 8rem;
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+      background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 1rem;
+      filter: drop-shadow(0 0 30px rgba(99, 102, 241, 0.3));
+    }
+    .error-card {
+      max-width: 480px;
+      padding: 3rem 2rem;
+      border-radius: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="card error-card">
+      <div class="error-code">404</div>
+      <h1 style="font-size: 2rem; margin-bottom: 1rem;">Lost in Space</h1>
+      <p style="color: var(--text-muted); margin-bottom: 2.5rem; line-height: 1.6;">
+        The resource you are looking for has been moved, deleted, or does not exist in the PayKit control node directory.
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button class="btn btn-secondary" onclick="window.history.back()">Go Back</button>
+        <button class="btn btn-primary" onclick="window.location.href='/'">Go to Homepage 🏠</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

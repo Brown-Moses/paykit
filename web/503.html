@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>503 — Service Unavailable</title>
+  <link rel="stylesheet" href="/portal/paykit.css">
+  <style>
+    :root {
+      --accent-cyan: var(--accent-rose);
+      --glow-cyan: var(--glow-rose);
+    }
+    body {
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.1) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.05) 0px, transparent 50%);
+    }
+    .error-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+      text-align: center;
+    }
+    .error-code {
+      font-size: 8rem;
+      font-weight: 800;
+      font-family: 'Outfit', sans-serif;
+      background: linear-gradient(135deg, var(--accent-rose) 0%, var(--accent-amber) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      margin-bottom: 1rem;
+      filter: drop-shadow(0 0 30px rgba(244, 63, 94, 0.3));
+    }
+    .error-card {
+      max-width: 480px;
+      padding: 3rem 2rem;
+      border-radius: 24px;
+      border-color: rgba(244, 63, 94, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="error-container">
+    <div class="card error-card">
+      <div class="error-code">503</div>
+      <h1 style="font-size: 2rem; margin-bottom: 1rem; color: var(--accent-rose);">Node Disconnected</h1>
+      <p style="color: var(--text-muted); margin-bottom: 2.5rem; line-height: 1.6;">
+        The database pool or upstream message broker node is unreachable. The ingestion server is temporarily in safe degradation mode.
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button class="btn btn-primary" onclick="window.location.reload()">
+          <span>🔄</span> Reconnect Node
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
