@@ -3,28 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subscription & Plans — PayKit Portal</title>
+  <title>Subscription — PayKit</title>
   <link rel="stylesheet" href="/portal/paykit.css">
   <style>
-    .usage-detail-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 1.5rem;
-      margin-top: 1.5rem;
-      border-top: 1px solid var(--border-color);
-      padding-top: 1.5rem;
-    }
-    .comparison-table {
-      width: 100%;
-      margin-top: 2rem;
-    }
-    .comparison-table tr.highlighted {
-      background-color: rgba(6, 182, 212, 0.04);
-      border: 1px solid rgba(6, 182, 212, 0.2);
-    }
-    .comparison-table td {
-      padding: 1.5rem 1rem;
-    }
+    .usage-detail-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:16px; padding-top:16px; border-top:0.5px solid var(--border); }
+    .comparison-table { width:100%; }
+    .comparison-table tr.highlighted { background: rgba(6,182,212,0.06); }
+    .comparison-table td { padding:14px 12px; }
   </style>
 </head>
 <body>
@@ -33,120 +18,98 @@
     <div id="sidebar-container"></div>
 
     <div class="main-content">
-      <div>
-        <h1>Subscription Plans</h1>
-        <p class="subtitle">Understand your quota metrics and scale your integration seamlessly</p>
+      <div class="page-header">
+        <div>
+          <div class="page-title">Subscription</div>
+          <div class="page-subtitle">Track quota usage and review available plans</div>
+        </div>
       </div>
 
-      <!-- Current plan details with larger quota meter -->
       <div class="grid-cols-2">
         <div class="card">
           <div class="card-header">
-            <span style="font-weight: 700; color: var(--text-muted); font-size: 0.8rem; letter-spacing: 0.05em;">YOUR ACTIVE PLAN</span>
-            <span class="badge badge-success" id="active-tier-badge" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;">Free Plan</span>
+            <span class="card-label">Active plan</span>
+            <span class="badge badge-success" id="active-tier-badge">Free plan</span>
           </div>
-          
-          <div style="font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem;" id="active-tier-title">Free Sandbox</div>
-          <p style="color: var(--text-muted); font-size: 0.95rem; line-height: 1.5;">
-            Excellent for testing webhooks locally and prototyping new integrations. Upgrade as you scale.
-          </p>
 
-          <!-- Large detailed progress meter -->
-          <div class="quota-container" style="margin-top: 2.5rem;">
-            <div class="quota-bar-bg" style="height: 16px; border-radius: 99px;">
-              <div class="quota-bar-fill" id="quota-bar-fill" style="height: 100%;"></div>
+          <div class="page-title" id="active-tier-title">Free sandbox</div>
+          <p class="page-subtitle" style="margin-top:6px;">A good fit for testing and early integration work.</p>
+
+          <div class="quota-container" style="margin-top:16px;">
+            <div class="quota-bar-bg" style="height:10px; border-radius:999px;">
+              <div class="quota-bar-fill" id="quota-bar-fill" style="height:100%;"></div>
             </div>
-            
+
             <div class="usage-detail-grid">
               <div>
-                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Calls Ingested</span>
-                <strong id="calls-used" style="font-size: 1.25rem; color: var(--text-main);">-</strong>
+                <span class="card-label">Calls ingested</span>
+                <strong id="calls-used" style="font-size:1.1rem; color:var(--text-primary);">-</strong>
               </div>
               <div>
-                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Calls Remaining</span>
-                <strong id="calls-remaining" style="font-size: 1.25rem; color: var(--text-main);">-</strong>
+                <span class="card-label">Calls remaining</span>
+                <strong id="calls-remaining" style="font-size:1.1rem; color:var(--text-primary);">-</strong>
               </div>
               <div>
-                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; text-transform: uppercase;">Resets Date</span>
-                <strong id="reset-date" style="font-size: 1.25rem; color: var(--accent-cyan);">-</strong>
+                <span class="card-label">Reset date</span>
+                <strong id="reset-date" style="font-size:1.1rem; color:var(--accent);">-</strong>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 3-Months Usage History -->
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">📊 Call Volume History</h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);">Last 3 Months</span>
+            <h3 class="card-title">Usage history</h3>
+            <span class="card-label">Last 3 months</span>
           </div>
-          <div id="usage-history-chart" style="height: 220px; width: 100%;">
-            Loading usage history...
-          </div>
+          <div id="usage-history-chart" style="height:220px; width:100%;">Loading usage history…</div>
         </div>
       </div>
 
-      <!-- Plan Comparison Table -->
       <div class="card">
-        <div class="card-header" style="margin-bottom: 0;">
-          <h3 class="card-title">⚡ PayKit Pricing & Plans</h3>
+        <div class="card-header" style="margin-bottom:0;">
+          <h3 class="card-title">Plans</h3>
         </div>
-        
+
         <div class="table-container">
           <table class="comparison-table">
             <thead>
               <tr>
-                <th>Tier name</th>
-                <th>Monthly Calls Limit</th>
-                <th>Core Features</th>
+                <th>Tier</th>
+                <th>Monthly calls</th>
+                <th>Features</th>
                 <th>Price</th>
-                <th>Actions</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               <tr id="row-free">
-                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Free Plan</td>
-                <td style="font-weight: 600;">1,000 calls / mo</td>
-                <td style="color: var(--text-muted); font-size: 0.9rem;">
-                  HMAC validation, standard 3-attempt retries, 24h DLQ retention
-                </td>
-                <td style="font-weight: 700; color: var(--accent-cyan);">$0 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
-                <td>
-                  <button class="btn btn-secondary" style="width: 100%;" disabled id="btn-free">Current Tier</button>
-                </td>
+                <td class="strong">Free plan</td>
+                <td>1,000 calls / mo</td>
+                <td class="subtitle">HMAC validation, retries, 24h DLQ retention</td>
+                <td class="strong">$0<span class="subtitle"> / month</span></td>
+                <td><button class="btn btn-secondary" style="width:100%;" disabled id="btn-free">Current tier</button></td>
               </tr>
               <tr id="row-starter">
-                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Starter Plan</td>
-                <td style="font-weight: 600;">25,000 calls / mo</td>
-                <td style="color: var(--text-muted); font-size: 0.9rem;">
-                  Custom backoff configs, 7-day DLQ recovery logs, priority email alerts
-                </td>
-                <td style="font-weight: 700; color: var(--accent-cyan);">$29 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
-                <td>
-                  <button class="btn btn-primary" style="width: 100%;" onclick="openUpgradeModal('Starter', 29, 25000)" id="btn-starter">Upgrade Plan</button>
-                </td>
+                <td class="strong">Starter</td>
+                <td>25,000 calls / mo</td>
+                <td class="subtitle">Custom backoff, 7-day DLQ logs, priority alerts</td>
+                <td class="strong">$29<span class="subtitle"> / month</span></td>
+                <td><button class="btn" style="width:100%;" onclick="openUpgradeModal('Starter', 29, 25000)" id="btn-starter">Upgrade</button></td>
               </tr>
               <tr id="row-growth">
-                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Growth Plan</td>
-                <td style="font-weight: 600;">100,000 calls / mo</td>
-                <td style="color: var(--text-muted); font-size: 0.9rem;">
-                  SLA 99.9% uptime, Slack incident alerting, White-glove setup and onboarding
-                </td>
-                <td style="font-weight: 700; color: var(--accent-cyan);">$79 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: normal;">/ month</span></td>
-                <td>
-                  <button class="btn btn-primary" style="width: 100%;" onclick="openUpgradeModal('Growth', 79, 100000)" id="btn-growth">Upgrade Plan</button>
-                </td>
+                <td class="strong">Growth</td>
+                <td>100,000 calls / mo</td>
+                <td class="subtitle">SLA support, incident alerting, setup help</td>
+                <td class="strong">$79<span class="subtitle"> / month</span></td>
+                <td><button class="btn" style="width:100%;" onclick="openUpgradeModal('Growth', 79, 100000)" id="btn-growth">Upgrade</button></td>
               </tr>
               <tr id="row-enterprise">
-                <td style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);">Enterprise</td>
-                <td style="font-weight: 600;">Unlimited calls</td>
-                <td style="color: var(--text-muted); font-size: 0.9rem;">
-                  Dedicated server host deployment, multi-region failovers, custom integration hooks
-                </td>
-                <td style="font-weight: 700; color: var(--accent-cyan);">Custom</td>
-                <td>
-                  <button class="btn btn-primary" style="width: 100%;" onclick="openContactModal()" id="btn-enterprise">Contact Sales</button>
-                </td>
+                <td class="strong">Enterprise</td>
+                <td>Unlimited</td>
+                <td class="subtitle">Dedicated hosting, multi-region failover, custom hooks</td>
+                <td class="strong">Custom</td>
+                <td><button class="btn" style="width:100%;" onclick="openContactModal()" id="btn-enterprise">Contact sales</button></td>
               </tr>
             </tbody>
           </table>
@@ -155,49 +118,39 @@
     </div>
   </div>
 
-  <!-- Upgrade Checkout Modal -->
   <div class="modal-overlay" id="upgrade-modal-overlay">
     <div class="modal">
       <div class="modal-header">
-        <h3 class="card-title">🚀 Confirm Upgrade</h3>
-        <button class="btn btn-secondary" onclick="closeModal('upgrade-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+        <h3 class="modal-title">Confirm upgrade</h3>
+        <button class="btn" onclick="closeModal('upgrade-modal-overlay')">×</button>
       </div>
-      
-      <div style="margin-bottom: 2rem;">
-        <p style="color: var(--text-muted); line-height: 1.6;">
-          You are upgrading your account to the <strong id="modal-plan-tier" style="color: var(--text-main);"></strong> plan.<br><br>
-          This increases your limit to <strong id="modal-plan-calls" style="color: var(--text-main);"></strong> calls/month and grants access to priority queuing features.
-        </p>
-        
-        <div style="background-color: var(--bg-input); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color); margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+
+      <div style="margin-bottom:16px;">
+        <p class="modal-sub">You’re upgrading to <strong id="modal-plan-tier" style="color:var(--text-primary);"></strong> for <strong id="modal-plan-calls" style="color:var(--text-primary);"></strong> calls/month.</p>
+        <div style="background:rgba(255,255,255,0.02); border:0.5px solid var(--border); border-radius:10px; padding:12px; margin-top:12px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
           <div>
-            <span style="font-size: 0.8rem; color: var(--text-muted); display: block; font-weight: 600;">MONTHLY BILLING</span>
-            <strong style="font-size: 1.25rem;" id="modal-plan-price">$0 / month</strong>
+            <div class="card-label">Monthly billing</div>
+            <div class="strong" id="modal-plan-price">$0 / month</div>
           </div>
-          <span class="badge badge-info">Secure Gateway</span>
+          <span class="badge badge-neutral">Secure checkout</span>
         </div>
       </div>
 
-      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-        <button class="btn btn-secondary" onclick="closeModal('upgrade-modal-overlay')">Cancel</button>
-        <button class="btn btn-primary" onclick="processMockUpgrade()">Confirm & Ingest 💳</button>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModal('upgrade-modal-overlay')">Cancel</button>
+        <button class="btn btn-primary" onclick="processMockUpgrade()">Confirm upgrade</button>
       </div>
     </div>
   </div>
 
-  <!-- Contact Sales Modal -->
   <div class="modal-overlay" id="contact-modal-overlay">
     <div class="modal">
       <div class="modal-header">
-        <h3 class="card-title">🏢 Contact Sales</h3>
-        <button class="btn btn-secondary" onclick="closeModal('contact-modal-overlay')" style="padding: 0.4rem 0.6rem;">✕</button>
+        <h3 class="modal-title">Contact sales</h3>
+        <button class="btn" onclick="closeModal('contact-modal-overlay')">×</button>
       </div>
-      <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.6;">
-        For custom ingestion quota configurations, dedicated host nodes, or enterprise contracts, please drop a line to:<br><br>
-        <strong style="color: var(--accent-cyan); font-size: 1.1rem; word-break: break-all;">sales@paykit.dev</strong><br><br>
-        Our integration architects will respond within 4 hours.
-      </p>
-      <button class="btn btn-primary" onclick="closeModal('contact-modal-overlay')" style="width: 100%;">Close Panel</button>
+      <p class="modal-sub">For enterprise contracts or custom quota configurations, email <strong style="color:var(--accent); word-break:break-all;">sales@paykit.dev</strong>. Responses are typically within a few hours.</p>
+      <button class="btn btn-primary" onclick="closeModal('contact-modal-overlay')" style="width:100%;">Close</button>
     </div>
   </div>
 

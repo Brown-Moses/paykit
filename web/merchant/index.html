@@ -3,74 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sign In — PayKit Engine</title>
+  <title>Sign in — PayKit</title>
   <link rel="stylesheet" href="/portal/paykit.css">
-  <style>
-    .login-body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      background: radial-gradient(circle at center, #0f172a 0%, #030712 100%);
-      padding: 1.5rem;
-    }
-    .login-card {
-      width: 500px;
-      max-width: 100%;
-      text-align: center;
-      animation: fadeIn 0.4s ease-out;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .monospace-input {
-      font-family: 'Fira Code', monospace !important;
-      font-size: 1.1rem !important;
-      text-align: center;
-      letter-spacing: 0.05em;
-    }
-    .inline-error {
-      color: var(--accent-rose);
-      font-size: 0.9rem;
-      margin-top: 1rem;
-      display: none;
-      line-height: 1.4;
-      background: rgba(244, 63, 94, 0.05);
-      border: 1px solid rgba(244, 63, 94, 0.15);
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      text-align: left;
-    }
-  </style>
 </head>
-<body class="login-body">
-
-  <div class="card login-card">
-    <div class="card-header" style="justify-content: center; flex-direction: column; gap: 0.5rem; margin-bottom: 2.5rem;">
-      <div class="brand" style="margin-bottom: 0;">
-        <div class="brand-dot"></div>
-        PayKit Engine
-      </div>
-      <p class="subtitle">Enter your API key to access the portal</p>
-    </div>
-
-    <form id="login-form" onsubmit="handleLogin(event)">
-      <div class="form-group" style="margin-bottom: 1.5rem;">
-        <input type="text" id="api-key" class="monospace-input" placeholder="pk_live_xxxxxxxxxxxxxxxx" required autocomplete="off" autofocus>
+<body>
+  <div class="auth-shell">
+    <div class="card auth-card">
+      <div class="card-header">
+        <div class="brand">
+          <div class="brand-dot"></div>
+          PayKit Portal
+        </div>
+        <div class="page-header" style="display:block; margin-bottom:0;">
+          <div class="page-title">Sign in</div>
+          <div class="page-subtitle">Enter your API key to continue</div>
+        </div>
       </div>
 
-      <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 1rem; padding: 0.85rem;">
-        Sign In ⚡
-      </button>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <input type="text" id="api-key" class="mono" placeholder="pk_live_xxxxxxxxxxxxxxxx" required autocomplete="off" autofocus>
+        </div>
 
-      <div id="error-message" class="inline-error">
-        ⚠️ Invalid API key. Check your key and try again.
+        <button type="submit" class="btn btn-primary" style="width:100%;">
+          Continue
+        </button>
+
+        <div id="error-message" class="inline-error">Invalid API key.</div>
+      </form>
+
+      <div class="page-subtitle" style="margin-top:16px; text-align:center;">
+        Need a key? <a href="/portal/register.html">Register here</a>
       </div>
-    </form>
-
-    <div style="margin-top: 2.5rem; text-align: center; font-size: 0.9rem; color: var(--text-muted);">
-      Need a key? <a href="/portal/register.html" style="color: var(--accent-cyan); text-decoration: none; font-weight: 600;">Register Here &rarr;</a>
     </div>
   </div>
 
@@ -90,20 +54,18 @@
       try {
         const btn = document.querySelector('button[type="submit"]');
         btn.disabled = true;
-        btn.textContent = 'Authenticating Key... 🔑';
-        
+        btn.textContent = 'Checking key...';
+
         await API.login(apiKey);
-        Auth.showToast('Authentication Successful!');
         setTimeout(() => {
           window.location.href = '/portal/dashboard.html';
-        }, 800);
+        }, 200);
       } catch (err) {
         const btn = document.querySelector('button[type="submit"]');
         btn.disabled = false;
-        btn.textContent = 'Sign In ⚡';
-        
-        // Show inline error exactly as requested
-        errorDiv.textContent = '⚠️ Invalid API key. Check your key and try again.';
+        btn.textContent = 'Continue';
+
+        errorDiv.textContent = 'Invalid API key.';
         errorDiv.style.display = 'block';
       }
     }

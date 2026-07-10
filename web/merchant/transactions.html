@@ -3,58 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Transactions — PayKit Portal</title>
+  <title>Transactions — PayKit</title>
   <link rel="stylesheet" href="/portal/paykit.css">
   <style>
-    /* Custom transaction row hover cursor */
-    tbody tr {
-      cursor: pointer;
-    }
-    /* Timeline styles for drawer */
-    .timeline {
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      position: relative;
-      padding-left: 1.5rem;
-      margin-top: 1rem;
-    }
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 4px;
-      top: 8px;
-      bottom: 8px;
-      width: 2px;
-      background-color: var(--border-color);
-    }
-    .timeline-item {
-      position: relative;
-    }
-    .timeline-dot {
-      position: absolute;
-      left: -23px;
-      top: 6px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background-color: var(--text-muted);
-      border: 2px solid var(--bg-card-solid);
-    }
-    .timeline-dot.success {
-      background-color: var(--accent-emerald);
-      box-shadow: 0 0 8px var(--accent-emerald);
-    }
-    .timeline-dot.failed {
-      background-color: var(--accent-rose);
-      box-shadow: 0 0 8px var(--accent-rose);
-    }
-    .timeline-content {
-      background-color: rgba(255, 255, 255, 0.02);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0.85rem;
-    }
+    tbody tr { cursor: pointer; }
+    .timeline { display:flex; flex-direction:column; gap:12px; position:relative; padding-left:16px; }
+    .timeline::before { content:''; position:absolute; left:3px; top:4px; bottom:4px; width:1px; background: var(--border); }
+    .timeline-item { position:relative; }
+    .timeline-dot { position:absolute; left:-13px; top:4px; width:8px; height:8px; border-radius:999px; background: var(--text-secondary); }
+    .timeline-dot.success { background: var(--success); }
+    .timeline-dot.failed { background: var(--danger); }
+    .timeline-content { background: rgba(255,255,255,0.02); border:0.5px solid var(--border); border-radius:8px; padding:10px 12px; }
+    .filter-row { display:grid; grid-template-columns: 2fr 1fr auto; gap:12px; align-items:flex-end; }
+    .pagination { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:12px; }
   </style>
 </head>
 <body>
@@ -63,62 +24,57 @@
     <div id="sidebar-container"></div>
 
     <div class="main-content">
-      <div>
-        <h1>Transactions Log</h1>
-        <p class="subtitle">Search, filter, and drill into customer payments</p>
+      <div class="page-header">
+        <div>
+          <div class="page-title">Transactions</div>
+          <div class="page-subtitle">Search and inspect payment activity</div>
+        </div>
       </div>
 
-      <!-- Filters & Search Panel -->
-      <div class="card" style="padding: 1.5rem;">
-        <form id="filter-form" onsubmit="handleFilter(event)" style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 1.25rem; align-items: flex-end;">
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="search-query">Search Transaction</label>
-            <input type="text" id="search-query" placeholder="Enter Transaction ID or External ID...">
+      <div class="card">
+        <form id="filter-form" onsubmit="handleFilter(event)" class="filter-row">
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="search-query">Search</label>
+            <input type="text" id="search-query" placeholder="Search by transaction ID or order ID">
           </div>
 
-          <div class="form-group" style="margin-bottom: 0;">
-            <label for="filter-status">Filter Status</label>
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="filter-status">Status</label>
             <select id="filter-status">
-              <option value="">All Transactions</option>
+              <option value="">All</option>
               <option value="SUCCESSFUL">Successful</option>
               <option value="FAILED">Failed</option>
               <option value="PENDING">Pending</option>
             </select>
           </div>
 
-          <button type="submit" class="btn btn-primary" style="height: 48px; min-width: 140px;">
-            Search 🔍
-          </button>
+          <button type="submit" class="btn btn-primary">Search</button>
         </form>
       </div>
 
-      <!-- Transactions Logs Table -->
       <div class="card">
         <div class="table-container">
           <table>
             <thead>
               <tr>
-                <th>Provider TX ID</th>
+                <th>ID</th>
                 <th>External ID</th>
                 <th>Amount</th>
                 <th>Currency</th>
                 <th>Status</th>
-                <th>Received At</th>
+                <th>Received</th>
               </tr>
             </thead>
             <tbody id="transactions-tbody">
-              <tr>
-                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 3rem;">Loading transactions...</td>
-              </tr>
+              <tr><td colspan="6" style="text-align:center; padding:24px;">Loading transactions…</td></tr>
             </tbody>
           </table>
         </div>
 
-        <!-- Pagination Controls -->
         <div class="pagination">
-          <button class="btn btn-secondary" id="btn-prev" onclick="changePage(-1)" disabled>&larr; Previous</button>
-          <span style="color: var(--text-muted); font-size: 0.9rem;" id="page-indicator">Page 1</span>
-          <button class="btn btn-secondary" id="btn-next" onclick="changePage(1)" disabled>Next &rarr;</button>
+          <button class="btn" id="btn-prev" onclick="changePage(-1)" disabled>Previous</button>
+          <span id="page-indicator" class="subtitle">Page 1</span>
+          <button class="btn" id="btn-next" onclick="changePage(1)" disabled>Next</button>
         </div>
       </div>
     </div>
@@ -127,52 +83,47 @@
   <!-- Sliding Details Drawer (Slides from right) -->
   <div class="drawer" id="inspect-drawer">
     <div class="drawer-header">
-      <h3 class="card-title">🔍 Transaction Details</h3>
-      <button class="btn btn-secondary" onclick="closeDrawer()" style="padding: 0.4rem 0.6rem;">✕</button>
+      <h3 class="card-title"><i class="ti ti-arrows-exchange"></i> Transaction details</h3>
+      <button class="btn" onclick="closeDrawer()">×</button>
     </div>
 
     <div class="drawer-body">
-      <!-- Info Fields -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
-          <label style="font-size: 0.75rem;">Status</label>
-          <div style="margin-top: 0.25rem;"><span class="badge" id="drawer-status">-</span></div>
-        </div>
-        <div>
-          <label style="font-size: 0.75rem;">Received At</label>
-          <div id="drawer-received-at" style="font-weight: 600; margin-top: 0.25rem; font-size: 0.9rem;">-</div>
-        </div>
-        <div style="grid-column: span 2;">
-          <label style="font-size: 0.75rem;">Provider TX ID</label>
-          <div id="drawer-provider-tx-id" style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-weight: 500; margin-top: 0.25rem; font-size: 1rem; word-break: break-all;">-</div>
-        </div>
-        <div style="grid-column: span 2;">
-          <label style="font-size: 0.75rem;">External ID</label>
-          <div id="drawer-external-id" style="font-weight: 600; margin-top: 0.25rem; font-size: 0.95rem; word-break: break-all;">-</div>
+          <label>Status</label>
+          <div style="margin-top:4px;"><span class="badge" id="drawer-status">-</span></div>
         </div>
         <div>
-          <label style="font-size: 0.75rem;">Amount</label>
-          <div id="drawer-amount" style="font-size: 1.15rem; font-weight: 700; margin-top: 0.25rem; color: var(--text-main);">-</div>
+          <label>Received</label>
+          <div id="drawer-received-at" style="margin-top:4px; color:var(--text-primary);">-</div>
+        </div>
+        <div style="grid-column:span 2;">
+          <label>Provider ID</label>
+          <div id="drawer-provider-tx-id" class="mono" style="margin-top:4px; color:var(--accent); word-break:break-all;">-</div>
+        </div>
+        <div style="grid-column:span 2;">
+          <label>External ID</label>
+          <div id="drawer-external-id" style="margin-top:4px; color:var(--text-primary); word-break:break-all;">-</div>
         </div>
         <div>
-          <label style="font-size: 0.75rem;">Currency</label>
-          <div id="drawer-currency" style="font-size: 1.15rem; font-weight: 700; margin-top: 0.25rem; color: var(--text-main);">-</div>
+          <label>Amount</label>
+          <div id="drawer-amount" style="margin-top:4px; color:var(--text-primary);">-</div>
+        </div>
+        <div>
+          <label>Currency</label>
+          <div id="drawer-currency" style="margin-top:4px; color:var(--text-primary);">-</div>
         </div>
       </div>
 
-      <!-- Action Button if Failed -->
-      <div id="drawer-dlq-action-container" style="display: none; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-        <button class="btn btn-danger" id="btn-view-dlq" style="width: 100%; justify-content: center; gap: 0.5rem;">
-          📥 View Failures in DLQ
+      <div id="drawer-dlq-action-container" style="display:none; border-top:0.5px solid var(--border); padding-top:12px;">
+        <button class="btn btn-danger" id="btn-view-dlq" style="width:100%; justify-content:center;">
+          <i class="ti ti-inbox"></i> View failures in DLQ
         </button>
       </div>
 
-      <!-- Delivery Logs Timeline -->
-      <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-        <label>Webhook Delivery History</label>
-        <div id="drawer-timeline" class="timeline">
-          <!-- Timeline elements injected here -->
-        </div>
+      <div style="border-top:0.5px solid var(--border); padding-top:12px;">
+        <label>Webhook delivery history</label>
+        <div id="drawer-timeline" class="timeline" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>
@@ -236,10 +187,10 @@
       if (!txs || txs.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 3rem;">
-              <div class="empty-state" style="padding: 0;">
-                <div class="empty-state-icon">💸</div>
-                <p style="font-weight: 500;">No transactions found. If you search for an order, make sure the ID matches exactly.</p>
+            <td colspan="6" style="text-align:center; padding:24px;">
+              <div class="empty-state" style="padding:0;">
+                <div class="empty-state-icon"><i class="ti ti-arrows-exchange"></i></div>
+                <p>No transactions found. If you search for an order, make sure the ID matches exactly.</p>
               </div>
             </td>
           </tr>
@@ -254,12 +205,12 @@
         const badgeClass = tx.status === 'SUCCESSFUL' ? 'badge-success' : (tx.status === 'FAILED' ? 'badge-danger' : 'badge-warning');
         
         tr.innerHTML = `
-          <td style="font-family: 'Fira Code', monospace; color: var(--accent-cyan); font-weight: 500;">${tx.provider_tx_id}</td>
+          <td class="mono" style="color: var(--accent);">${tx.provider_tx_id}</td>
           <td>${tx.external_id}</td>
           <td>${parseFloat(tx.amount).toLocaleString()}</td>
-          <td style="font-weight: 600;">${tx.currency}</td>
+          <td>${tx.currency}</td>
           <td><span class="badge ${badgeClass}">${tx.status}</span></td>
-          <td style="color: var(--text-muted); font-size: 0.85rem;">${new Date(tx.received_at).toLocaleString()}</td>
+          <td>${new Date(tx.received_at).toLocaleString()}</td>
         `;
         
         // Handle row click
@@ -340,14 +291,14 @@
           item.innerHTML = `
             <div class="timeline-dot ${dotClass}"></div>
             <div class="timeline-content">
-              <div class="flex-between" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
                 <span>Attempt #${log.Attempt}</span>
-                <span class="badge ${isSuccess ? 'badge-success' : 'badge-danger'}" style="font-size: 0.65rem; padding: 0.15rem 0.4rem;">
+                <span class="badge ${isSuccess ? 'badge-success' : 'badge-danger'}">
                   HTTP ${log.ResponseCode || 'N/A'}
                 </span>
               </div>
-              ${log.ErrorMessage ? `<p style="font-family: 'Fira Code', monospace; font-size: 0.75rem; color: var(--accent-rose); margin-bottom: 0.25rem; word-break: break-all;">Error: ${log.ErrorMessage}</p>` : ''}
-              <div style="font-size: 0.75rem; color: var(--text-muted); text-align: right;">
+              ${log.ErrorMessage ? `<p class="mono" style="font-size:11px; color: var(--danger); margin-bottom:4px; word-break:break-all;">Error: ${log.ErrorMessage}</p>` : ''}
+              <div style="font-size:11px; color: var(--text-tertiary); text-align:right;">
                 ${new Date(log.DeliveredAt).toLocaleTimeString()}
               </div>
             </div>

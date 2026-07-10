@@ -49,22 +49,22 @@ const Auth = {
         <ul class="nav-links">
           <li class="${activePageName === 'dashboard' ? 'active' : ''}">
             <a href="/portal/dashboard.html">
-              <span>📊</span> Dashboard
+              <i class="ti ti-layout-dashboard"></i> Dashboard
             </a>
           </li>
           <li class="${activePageName === 'transactions' ? 'active' : ''}">
             <a href="/portal/transactions.html">
-              <span>💸</span> Transactions
+              <i class="ti ti-arrows-exchange"></i> Transactions
             </a>
           </li>
           <li class="${activePageName === 'dlq' ? 'active' : ''}">
             <a href="/portal/dlq.html">
-              <span>📥</span> DLQ Deliveries
+              <i class="ti ti-inbox"></i> DLQ
             </a>
           </li>
           <li class="${activePageName === 'subscription' ? 'active' : ''}">
             <a href="/portal/subscription.html">
-              <span>💳</span> Subscription
+              <i class="ti ti-credit-card"></i> Subscription
             </a>
           </li>
         </ul>
@@ -73,11 +73,11 @@ const Auth = {
             <div class="user-avatar">${merchantName.substring(0, 2).toUpperCase()}</div>
             <div class="user-details">
               <span class="user-name">${merchantName}</span>
-              <span class="user-plan">${merchantPlan} Plan</span>
+              <span class="user-plan">${merchantPlan} plan</span>
             </div>
           </div>
-          <button class="btn btn-secondary" onclick="Auth.logout()" style="width: 100%; justify-content: flex-start; gap: 0.5rem;">
-            🚪 Log Out
+          <button class="btn" onclick="Auth.logout()" style="width: 100%; justify-content: flex-start;">
+            <i class="ti ti-logout"></i> Log out
           </button>
         </div>
       </div>
@@ -97,10 +97,9 @@ const Auth = {
     const toast = document.createElement('div');
     toast.className = 'toast';
     if (type === 'error') {
-      toast.style.borderColor = 'var(--accent-rose)';
-      toast.innerHTML = `<span>❌</span> ${message}`;
+      toast.innerHTML = `<span class="badge badge-danger">error</span> ${message}`;
     } else {
-      toast.innerHTML = `<span>✅</span> ${message}`;
+      toast.innerHTML = `<span class="badge badge-success">ok</span> ${message}`;
     }
 
     container.appendChild(toast);
@@ -118,29 +117,29 @@ const Auth = {
     sidebarContainer.innerHTML = `
       <div class="sidebar">
         <div class="brand">
-          <div class="brand-dot" style="background: var(--accent-violet); box-shadow: 0 0 12px var(--accent-violet);"></div>
+          <div class="brand-dot"></div>
           Operator Portal
         </div>
         <ul class="nav-links">
           <li class="${activePageName === 'overview' ? 'active' : ''}">
             <a href="/admin/index.html">
-              <span>👥</span> All Merchants
+              <i class="ti ti-users"></i> All merchants
             </a>
           </li>
           <li class="${activePageName === 'merchants' ? 'active' : ''}">
             <a href="/admin/merchants.html">
-              <span>🛠️</span> Manage Quotas
+              <i class="ti ti-adjustments"></i> Manage quotas
             </a>
           </li>
           <li class="${activePageName === 'metrics' ? 'active' : ''}">
             <a href="/admin/metrics.html">
-              <span>📈</span> System Metrics
+              <i class="ti ti-chart-bar"></i> System metrics
             </a>
           </li>
         </ul>
         <div class="sidebar-footer">
-          <button class="btn btn-secondary" onclick="window.location.href='/portal/index.html'" style="width: 100%; justify-content: flex-start; gap: 0.5rem;">
-            🖥️ Merchant View
+          <button class="btn" onclick="window.location.href='/portal/index.html'" style="width: 100%; justify-content: flex-start;">
+            <i class="ti ti-building-store"></i> Merchant view
           </button>
         </div>
       </div>
